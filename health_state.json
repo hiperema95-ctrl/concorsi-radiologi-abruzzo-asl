@@ -1,7 +1,14 @@
 {
   "last_health_check": "2026-03-25",
+  "source_alert_dates": {
+    "InPA \u2014 radiologo": "2026-03-25",
+    "InPA \u2014 radiologia": "2026-03-25",
+    "ASL 2 Lanciano-Vasto-Chieti": "2026-03-25",
+    "ASL 3 Pescara": "2026-03-25",
+    "Regione Abruzzo \u2014 Bandi": "2026-03-25"
+  },
+  "total_runs": 5,
+  "last_successful_scrape": "2026-03-25",
   "last_alert_date": "",
-  "consecutive_failures": 0,
-  "total_runs": 4,
-  "last_successful_scrape": "2026-03-25"
+  "consecutive_failures": 0
 }
