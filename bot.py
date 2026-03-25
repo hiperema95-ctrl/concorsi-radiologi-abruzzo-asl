@@ -1,12 +1,17 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi in Abruzzo
 ============================================================
-Versione aggiornata 25/03/2026:
-  - Filtro data: ignora TUTTI i bandi pubblicati prima della data di avvio del bot
-  - InPA rimosso (blocca i bot) — sostituito con Gazzetta Ufficiale estesa
-    e portali trasparenza diretti delle ASL
-  - Alert per sorgente offline (max 1/giorno per sorgente)
-  - Health check giornaliero con news radiologia
+URL tutti verificati manualmente al 25/03/2026.
+
+Sorgenti concorsi:
+  - ASL 1, 2, 3, 4 Abruzzo (URL diretti verificati)
+  - Regione Abruzzo (concorsi aperti)
+  - SIRM — Società Italiana di Radiologia Medica
+  - FNO TSRM — Rubrica Concorsi settimanale
+  - ConcorsiPubblici.com — Radiologo
+  - Concorsi.it — Radiologia
+
+Filtro data: ignora tutto ciò che è precedente al 25/03/2026.
 """
 
 import os
@@ -28,8 +33,7 @@ CHAT_ID        = os.environ.get("CHAT_ID", "")
 SEEN_FILE   = "seen_concorsi.json"
 HEALTH_FILE = "health_state.json"
 
-# ── Data di avvio del bot: ignora tutto ciò che è precedente ──
-# Formato YYYY-MM-DD. Cambia solo se vuoi allargare/restringere la finestra.
+# Ignora bandi precedenti a questa data
 BOT_START_DATE = date(2026, 3, 25)
 
 logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=logging.INFO)
@@ -48,75 +52,80 @@ KEYWORDS = [
     "medico radiologo", "specialista radiologo",
     "diagnostica per immagini", "radiologia diagnostica",
     "tecnico sanitario di radiologia", "tsrm",
+    "neuroradiologia", "radiologia interventistica",
 ]
 
 REGION_KEYWORDS = [
     "abruzzo", "l'aquila", "aquila", "teramo", "pescara", "chieti",
-    "lanciano", "vasto", "avezzano", "sulmona",
+    "lanciano", "vasto", "avezzano", "sulmona", "asl",
 ]
 
 # ──────────────────────────────────────────────
-# SORGENTI CONCORSI — tutte verificate
+# SORGENTI — tutte verificate manualmente
 # ──────────────────────────────────────────────
 SOURCES = [
     {
-        # Gazzetta Ufficiale — radiologo abruzzo
-        "name": "Gazzetta Ufficiale — Radiologo Abruzzo",
-        "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata",
-        "params": {"q": "radiologo abruzzo"},
-        "type": "gazzetta",
-        "ssl": True,
-    },
-    {
-        # Gazzetta Ufficiale — radiologia abruzzo
-        "name": "Gazzetta Ufficiale — Radiologia Abruzzo",
-        "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata",
-        "params": {"q": "radiologia abruzzo"},
-        "type": "gazzetta",
-        "ssl": True,
-    },
-    {
-        # Gazzetta Ufficiale — tecnico radiologia abruzzo
-        "name": "Gazzetta Ufficiale — Tecnico Radiologia",
-        "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata",
-        "params": {"q": "tecnico radiologia medica abruzzo"},
-        "type": "gazzetta",
-        "ssl": True,
-    },
-    {
-        # ASL 1 — portale trasparenza (URL verificato)
         "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
         "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html",
         "type": "generic",
         "ssl": True,
+        "region_filter": False,  # è già una ASL abruzzese, non serve filtro regione
     },
     {
-        # ASL 2 — URL verificato
         "name": "ASL 2 Lanciano-Vasto-Chieti",
         "url": "https://lnx.asl2abruzzo.it/b/",
         "type": "generic",
         "ssl": True,
+        "region_filter": False,
     },
     {
-        # ASL 3 Pescara — URL ufficiale verificato
         "name": "ASL 3 Pescara",
         "url": "https://www.asl.pe.it/BandiConcorsi.jsp",
         "type": "generic",
         "ssl": True,
+        "region_filter": False,
     },
     {
-        # ASL 4 Teramo — funzionante
         "name": "ASL 4 Teramo",
         "url": "https://www.aslteramo.it/concorsi",
         "type": "generic",
         "ssl": True,
+        "region_filter": False,
     },
     {
-        # Regione Abruzzo — portale trasparenza
-        "name": "Regione Abruzzo — Concorsi",
-        "url": "https://trasparenza.regione.abruzzo.it/archivio28_bandi-di-concorso_0.html",
+        "name": "Regione Abruzzo — Concorsi Aperti",
+        "url": "https://www2.regione.abruzzo.it/content/concorsi-aperti",
         "type": "generic",
         "ssl": True,
+        "region_filter": False,
+    },
+    {
+        "name": "SIRM — Società Italiana Radiologia Medica",
+        "url": "https://sirm.org/concorsi-2/",
+        "type": "generic",
+        "ssl": True,
+        "region_filter": True,   # nazionale → filtriamo per Abruzzo
+    },
+    {
+        "name": "FNO TSRM — Rubrica Concorsi",
+        "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/",
+        "type": "generic",
+        "ssl": True,
+        "region_filter": True,
+    },
+    {
+        "name": "ConcorsiPubblici.com — Radiologo",
+        "url": "https://www.concorsipubblici.com/concorsi-radiologo.htm",
+        "type": "generic",
+        "ssl": True,
+        "region_filter": True,
+    },
+    {
+        "name": "Concorsi.it — Radiologia",
+        "url": "https://www.concorsi.it/risultati?ric=radiologia",
+        "type": "generic",
+        "ssl": True,
+        "region_filter": True,
     },
 ]
 
@@ -169,31 +178,22 @@ NEWS_KEYWORDS = [
 # FILTRO DATA
 # ══════════════════════════════════════════════
 
-# Pattern per estrarre date dal testo dei bandi
-DATE_PATTERNS = [
-    # GG/MM/AAAA o GG-MM-AAAA
-    (r'\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b',  "%d/%m/%Y"),
-    # AAAA-MM-GG (ISO)
-    (r'\b(20\d{2})-(\d{2})-(\d{2})\b',             "iso"),
-    # GG mese AAAA (es. "15 marzo 2026")
-    (r'\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|'
-     r'luglio|agosto|settembre|ottobre|novembre|dicembre)\s+(20\d{2})\b', "it"),
-]
-
 MONTHS_IT = {
     "gennaio": 1, "febbraio": 2, "marzo": 3, "aprile": 4,
     "maggio": 5, "giugno": 6, "luglio": 7, "agosto": 8,
     "settembre": 9, "ottobre": 10, "novembre": 11, "dicembre": 12,
 }
 
+DATE_PATTERNS = [
+    (r'\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b',  "dmy"),
+    (r'\b(20\d{2})-(\d{2})-(\d{2})\b',             "iso"),
+    (r'\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|'
+     r'luglio|agosto|settembre|ottobre|novembre|dicembre)\s+(20\d{2})\b', "it"),
+]
+
 
 def extract_date(text: str) -> date | None:
-    """
-    Cerca la prima data valida nel testo e la restituisce come oggetto date.
-    Ritorna None se non trova nessuna data riconoscibile.
-    """
     text_lower = text.lower()
-
     for pattern, fmt in DATE_PATTERNS:
         m = re.search(pattern, text_lower)
         if not m:
@@ -202,38 +202,24 @@ def extract_date(text: str) -> date | None:
             if fmt == "iso":
                 return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
             elif fmt == "it":
-                day   = int(m.group(1))
                 month = MONTHS_IT.get(m.group(2), 0)
-                year  = int(m.group(3))
                 if month:
-                    return date(year, month, day)
+                    return date(int(m.group(3)), month, int(m.group(1)))
             else:
-                day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
-                return date(year, month, day)
+                return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
         except ValueError:
             continue
-
     return None
 
 
-def is_recent(text: str, url: str) -> bool:
-    """
-    Restituisce True se il bando è successivo a BOT_START_DATE.
-    Se non riesce ad estrarre la data, lascia passare (meglio un falso
-    positivo che perdere un bando reale).
-    """
-    # Cerca la data nel testo del titolo + URL
-    combined = f"{text} {url}"
-    found = extract_date(combined)
-
+def is_recent(text: str) -> bool:
+    """True se il bando è >= BOT_START_DATE, o se non si riesce ad estrarre la data."""
+    found = extract_date(text)
     if found is None:
-        # Nessuna data riconoscibile → lascia passare
-        return True
-
+        return True  # nessuna data trovata → lascia passare per sicurezza
     if found >= BOT_START_DATE:
         return True
-
-    log.info(f"  Bando ignorato (data {found} < {BOT_START_DATE}): {text[:50]}")
+    log.info(f"  Ignorato (data {found} < {BOT_START_DATE}): {text[:50]}")
     return False
 
 
@@ -332,62 +318,46 @@ def is_relevant(text: str) -> bool:
     return any(kw in text.lower() for kw in KEYWORDS)
 
 
+def is_abruzzo(text: str) -> bool:
+    return any(rk in text.lower() for rk in REGION_KEYWORDS)
+
+
 def scrape_generic(source: dict) -> list[dict] | None:
     soup = fetch(source["url"], ssl_verify=source.get("ssl", True))
     if not soup:
         return None
+
+    region_filter = source.get("region_filter", False)
     results = []
+
     for a in soup.find_all("a", href=True):
         title = a.get_text(separator=" ", strip=True)
         href  = a["href"]
-        if not title or len(title) < 10 or not is_relevant(title):
-            continue
-        full_url = href if href.startswith("http") else urljoin(source["url"], href)
 
-        # ── Filtro data ──
-        # Cerca la data nel testo circostante (parent element)
+        if not title or len(title) < 10:
+            continue
+        if not is_relevant(title):
+            continue
+
+        # Per sorgenti nazionali filtra anche per regione
+        # Cerca il testo nel contesto circostante (riga/paragrafo)
         parent_text = ""
         parent = a.parent
         if parent:
             parent_text = parent.get_text(separator=" ", strip=True)
+        context = f"{title} {parent_text}"
 
-        if not is_recent(f"{title} {parent_text}", full_url):
+        if region_filter and not is_abruzzo(context):
             continue
 
-        results.append({
-            "title":  title,
-            "url":    full_url,
-            "source": source["name"],
-            "date":   datetime.now().strftime("%d/%m/%Y"),
-        })
-    log.info(f"  [{source['name']}] {len(results)} risultati rilevanti e recenti")
-    return results
-
-
-def scrape_gazzetta(source: dict) -> list[dict] | None:
-    soup = fetch(source["url"], params=source.get("params"))
-    if not soup:
-        return None
-    results = []
-    for row in soup.select("tr, .risultato, .atto, article, li"):
-        text    = row.get_text(separator=" ", strip=True)
-        link_el = row.select_one("a[href]")
-
-        if not is_relevant(text):
-            continue
-        if not any(rk in text.lower() for rk in REGION_KEYWORDS):
+        # Filtro data sul contesto
+        if not is_recent(context):
             continue
 
-        # ── Filtro data ──
-        if not is_recent(text, link_el["href"] if link_el else ""):
-            continue
+        full_url = href if href.startswith("http") else urljoin(source["url"], href)
 
-        href     = link_el["href"] if link_el else source["url"]
-        full_url = href if href.startswith("http") else f"https://www.gazzettaufficiale.it{href}"
-        title    = link_el.get_text(strip=True) if link_el else text[:120]
-
-        # Estrai la data dal testo della riga per mostrarla nel messaggio
-        found_date = extract_date(text)
+        # Estrai data per mostrarla nel messaggio
+        found_date = extract_date(context)
         date_str   = found_date.strftime("%d/%m/%Y") if found_date else datetime.now().strftime("%d/%m/%Y")
 
         results.append({
@@ -396,13 +366,12 @@ def scrape_gazzetta(source: dict) -> list[dict] | None:
             "source": source["name"],
             "date":   date_str,
         })
-    log.info(f"  [{source['name']}] {len(results)} risultati rilevanti e recenti")
+
+    log.info(f"  [{source['name']}] {len(results)} bandi rilevanti e recenti")
     return results
 
 
 def scrape_source(source: dict) -> list[dict] | None:
-    t = source.get("type", "generic")
-    if t == "gazzetta": return scrape_gazzetta(source)
     return scrape_generic(source)
 
 
@@ -474,7 +443,7 @@ async def main():
         return
 
     log.info("═══ Avvio bot concorsi radiologi Abruzzo ═══")
-    log.info(f"Filtro data attivo: ignoro bandi precedenti al {BOT_START_DATE}")
+    log.info(f"Filtro data: ignoro bandi precedenti al {BOT_START_DATE}")
 
     seen  = load_seen()
     state = load_health()
@@ -503,7 +472,7 @@ async def main():
                 await send_msg(bot, fmt_source_alert(source["name"]))
                 state["source_alert_dates"][source["name"]] = today
             else:
-                log.info(f"  Alert già inviato oggi per '{source['name']}' — skip")
+                log.info(f"  Alert già inviato oggi — skip")
             await asyncio.sleep(2)
             continue
 
