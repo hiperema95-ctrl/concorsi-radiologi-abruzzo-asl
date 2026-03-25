@@ -1,7 +1,7 @@
 {
-  "last_health_check": "",
+  "last_health_check": "2026-03-25",
   "last_alert_date": "",
   "consecutive_failures": 0,
-  "total_runs": 3,
+  "total_runs": 4,
   "last_successful_scrape": "2026-03-25"
 }
