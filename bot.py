@@ -1,18 +1,7 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi in Abruzzo
 ============================================================
-Versione per GitHub Actions: script one-shot, scheduling via cron.
-
-Funzionalità:
-  - Scraping concorsi: InPA, ASL abruzzesi, Gazzetta Ufficiale, Regione Abruzzo
-  - Notifica immediata per ogni nuovo bando trovato
-  - Health check giornaliero con notizia dal mondo della radiologia
-    (presa gratuitamente da ESR / RSNA / AuntMinnie / Radiology Today)
-  - Alert se UNA QUALSIASI sorgente concorsi non risponde (max 1 alert/giorno per sorgente)
-
-Secrets GitHub richiesti:
-  TELEGRAM_TOKEN  →  token del bot (@BotFather)
-  CHAT_ID         →  chat ID personale o canale (-100xxx)
+URL verificati e aggiornati al 25/03/2026.
 """
 
 import os
@@ -27,7 +16,6 @@ from urllib.parse import urljoin
 from telegram import Bot
 from telegram.constants import ParseMode
 
-# ─────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID        = os.environ.get("CHAT_ID", "")
 
@@ -49,71 +37,86 @@ KEYWORDS = [
     "radiologo", "radiologia", "radiodiagnostica",
     "medico radiologo", "specialista radiologo",
     "diagnostica per immagini", "radiologia diagnostica",
+    "tecnico sanitario di radiologia",
 ]
 
 REGION_KEYWORDS = [
     "abruzzo", "l'aquila", "aquila", "teramo", "pescara", "chieti",
-    "asl abruzzo", "asl lanciano", "asl avezzano", "asl sulmona",
+    "lanciano", "vasto", "avezzano", "sulmona",
 ]
 
 # ──────────────────────────────────────────────
-# SORGENTI CONCORSI
+# SORGENTI CONCORSI — URL verificati 25/03/2026
 # ──────────────────────────────────────────────
 SOURCES = [
     {
-        "name": "InPA — radiologo",
+        # Portale nazionale — fonte primaria e più affidabile
+        "name": "InPA — Portale Nazionale Concorsi",
         "url": "https://www.inpa.gov.it/concorsi-pubblici/",
         "type": "inpa",
         "params": {"keyword": "radiologo", "regione": "Abruzzo"},
         "ssl": True,
     },
     {
-        "name": "InPA — radiologia",
-        "url": "https://www.inpa.gov.it/concorsi-pubblici/",
-        "type": "inpa",
-        "params": {"keyword": "radiologia", "regione": "Abruzzo"},
-        "ssl": True,
-    },
-    {
+        # Portale trasparenza ASL 1 — URL verificato
         "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
-        "url": "https://www.asl1abruzzo.it/index.php/albo-on-line",
+        "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html",
         "type": "generic",
         "ssl": True,
     },
     {
+        # Sito istituzionale ASL 1 — pagina concorsi verificata
+        "name": "ASL 1 — Sito Istituzionale",
+        "url": "https://www.asl1abruzzo.it/pagina26_concorsi.html",
+        "type": "generic",
+        "ssl": True,
+    },
+    {
+        # ASL 2 — URL verificato dalla ricerca
         "name": "ASL 2 Lanciano-Vasto-Chieti",
-        "url": "https://www.asl2abruzzo.it/index.php/albo-online",
+        "url": "https://lnx.asl2abruzzo.it/b/",
         "type": "generic",
         "ssl": True,
     },
     {
-        "name": "ASL 3 Pescara",
-        "url": "https://www.ausl.pe.it/index.php/albo-pretorio",
+        # ASL 3 Pescara — URL ufficiale verificato (dominio asl.pe.it)
+        "name": "ASL 3 Pescara — Bandi di Concorso",
+        "url": "https://www.asl.pe.it/BandiConcorsi.jsp",
         "type": "generic",
-        "ssl": False,
+        "ssl": True,
     },
     {
+        # ASL 3 Pescara — Concorsi in atto
+        "name": "ASL 3 Pescara — Concorsi in Atto",
+        "url": "https://www.asl.pe.it/EsitoBandiConcorsi.jsp?tipo=P",
+        "type": "generic",
+        "ssl": True,
+    },
+    {
+        # ASL 4 Teramo — funzionava già prima
         "name": "ASL 4 Teramo",
         "url": "https://www.aslteramo.it/concorsi",
         "type": "generic",
         "ssl": True,
     },
     {
-        "name": "Regione Abruzzo — Bandi",
-        "url": "https://www.regione.abruzzo.it/content/bandi-e-concorsi",
-        "type": "generic",
-        "ssl": False,
+        # Gazzetta Ufficiale — fonte ufficiale nazionale
+        "name": "Gazzetta Ufficiale — Concorsi",
+        "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata?q=radiologo+abruzzo",
+        "type": "gazzetta",
+        "ssl": True,
     },
     {
-        "name": "Gazzetta Ufficiale",
-        "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata?q=radiologo+abruzzo",
+        # Gazzetta Ufficiale — tecnico radiologia
+        "name": "Gazzetta Ufficiale — Tecnico Radiologia",
+        "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata?q=tecnico+radiologia+abruzzo",
         "type": "gazzetta",
         "ssl": True,
     },
 ]
 
 # ──────────────────────────────────────────────
-# SORGENTI NEWS RADIOLOGIA (gratuite, pubbliche)
+# SORGENTI NEWS RADIOLOGIA (gratuite)
 # ──────────────────────────────────────────────
 NEWS_SOURCES = [
     {
@@ -158,7 +161,7 @@ NEWS_KEYWORDS = [
     "mri", "ct", "ultrasound", "x-ray", "pet",
     "radiology", "imaging", "diagnostic",
     "cancer", "tumor", "detection", "scan",
-    "innovation", "breakthrough", "study", "research", "trial",
+    "innovation", "breakthrough", "study", "research",
 ]
 
 
@@ -181,7 +184,7 @@ def save_seen(seen: set):
 def load_health() -> dict:
     defaults = {
         "last_health_check":      "",
-        "source_alert_dates":     {},   # {nome_sorgente: "YYYY-MM-DD"}
+        "source_alert_dates":     {},
         "total_runs":             0,
         "last_successful_scrape": "",
     }
@@ -206,12 +209,15 @@ def today_str() -> str:
 
 
 # ══════════════════════════════════════════════
-# SCRAPING NEWS RADIOLOGIA (gratis)
+# FETCH
 # ══════════════════════════════════════════════
 
 def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSoup | None:
     try:
-        resp = requests.get(url, headers=HEADERS, params=params, timeout=25, verify=ssl_verify)
+        resp = requests.get(
+            url, headers=HEADERS, params=params,
+            timeout=25, verify=ssl_verify
+        )
         resp.raise_for_status()
         return BeautifulSoup(resp.text, "lxml")
     except Exception as e:
@@ -219,11 +225,11 @@ def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSo
         return None
 
 
+# ══════════════════════════════════════════════
+# NEWS RADIOLOGIA
+# ══════════════════════════════════════════════
+
 def get_daily_news() -> dict | None:
-    """
-    Cerca la prima notizia rilevante nei siti di radiologia internazionali.
-    Scorre le sorgenti nell'ordine finché non trova qualcosa di pertinente.
-    """
     for ns in NEWS_SOURCES:
         soup = fetch(ns["url"], ssl_verify=ns.get("ssl", True))
         if not soup:
@@ -235,7 +241,6 @@ def get_daily_news() -> dict | None:
                 continue
             if not any(kw in title.lower() for kw in NEWS_KEYWORDS):
                 continue
-            # Normalizza URL
             if href.startswith("http"):
                 full_url = href
             elif href.startswith("/"):
@@ -244,8 +249,6 @@ def get_daily_news() -> dict | None:
                 continue
             log.info(f"News trovata [{ns['name']}]: {title[:70]}")
             return {"title": title, "url": full_url, "source": ns["name"]}
-
-    log.warning("Nessuna news trovata — uso messaggio di fallback")
     return None
 
 
@@ -260,7 +263,7 @@ def is_relevant(text: str) -> bool:
 def scrape_generic(source: dict) -> list[dict] | None:
     soup = fetch(source["url"], ssl_verify=source.get("ssl", True))
     if not soup:
-        return None   # None = sorgente irraggiungibile
+        return None
     results = []
     for a in soup.find_all("a", href=True):
         title = a.get_text(separator=" ", strip=True)
@@ -275,7 +278,7 @@ def scrape_generic(source: dict) -> list[dict] | None:
             "date":   datetime.now().strftime("%d/%m/%Y"),
         })
     log.info(f"  [{source['name']}] {len(results)} risultati rilevanti")
-    return results   # [] = raggiunta ma nessun bando rilevante
+    return results
 
 
 def scrape_inpa(source: dict) -> list[dict] | None:
@@ -414,7 +417,7 @@ async def main():
     today     = today_str()
     new_count = 0
 
-    # ── Scraping concorsi ────────────────────────────────────
+    # ── Scraping concorsi ────────────────────────
     for source in SOURCES:
         log.info(f"→ {source['name']}")
         try:
@@ -423,7 +426,6 @@ async def main():
             log.error(f"  Errore: {e}")
             concorsi = None
 
-        # Sorgente irraggiungibile → alert (max 1 al giorno per sorgente)
         if concorsi is None:
             last = state["source_alert_dates"].get(source["name"], "")
             if last != today:
@@ -435,7 +437,6 @@ async def main():
             await asyncio.sleep(2)
             continue
 
-        # Nuovi bandi → notifica immediata
         for c in concorsi:
             cid = make_id(c["title"], c["url"])
             if cid not in seen:
@@ -449,8 +450,7 @@ async def main():
 
     log.info(f"Nuovi bandi notificati: {new_count}")
 
-    # ── Health check giornaliero ─────────────────────────────
-    # Una volta al giorno, se non ci sono stati nuovi bandi, manda la news
+    # ── Health check giornaliero ─────────────────
     if state["last_health_check"] != today and new_count == 0:
         log.info("Recupero news radiologia del giorno...")
         news = get_daily_news()
@@ -461,9 +461,7 @@ async def main():
         state["last_health_check"] = today
 
     elif new_count > 0:
-        # Ha già mandato bandi: segna la data senza un messaggio extra
         state["last_health_check"] = today
-        state["last_successful_scrape"] = today
 
     else:
         log.info("Health check già inviato oggi — skip")
