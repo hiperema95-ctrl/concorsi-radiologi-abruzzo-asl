@@ -1,17 +1,11 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi in Abruzzo
 ============================================================
-URL tutti verificati manualmente al 25/03/2026.
-
-Sorgenti concorsi:
-  - ASL 1, 2, 3, 4 Abruzzo (URL diretti verificati)
-  - Regione Abruzzo (concorsi aperti)
-  - SIRM — Società Italiana di Radiologia Medica
-  - FNO TSRM — Rubrica Concorsi settimanale
-  - ConcorsiPubblici.com — Radiologo
-  - Concorsi.it — Radiologia
-
-Filtro data: ignora tutto ciò che è precedente al 25/03/2026.
+Fix 25/03/2026:
+  - Rimossi Concorsi.it e ConcorsiPubblici.com (non filtrabili per regione)
+  - URL Regione Abruzzo corretto
+  - Health check inviato ogni giorno indipendentemente dai bandi trovati
+  - Messaggio giornaliero include conteggio bandi attivi trovati oggi
 """
 
 import os
@@ -33,7 +27,6 @@ CHAT_ID        = os.environ.get("CHAT_ID", "")
 SEEN_FILE   = "seen_concorsi.json"
 HEALTH_FILE = "health_state.json"
 
-# Ignora bandi precedenti a questa data
 BOT_START_DATE = date(2026, 3, 25)
 
 logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=logging.INFO)
@@ -61,15 +54,16 @@ REGION_KEYWORDS = [
 ]
 
 # ──────────────────────────────────────────────
-# SORGENTI — tutte verificate manualmente
+# SORGENTI — verificate manualmente
 # ──────────────────────────────────────────────
 SOURCES = [
     {
+        # ASL locali — nessun filtro regione (sono già abruzzesi)
         "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
         "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html",
         "type": "generic",
         "ssl": True,
-        "region_filter": False,  # è già una ASL abruzzese, non serve filtro regione
+        "region_filter": False,
     },
     {
         "name": "ASL 2 Lanciano-Vasto-Chieti",
@@ -93,36 +87,32 @@ SOURCES = [
         "region_filter": False,
     },
     {
+        # Regione Abruzzo — URL corretto con parametri
         "name": "Regione Abruzzo — Concorsi Aperti",
-        "url": "https://www2.regione.abruzzo.it/content/concorsi-aperti",
+        "url": "http://www2.regione.abruzzo.it/concorsi/index.asp",
+        "params": {
+            "modello": "bandoAperti",
+            "msv": "concorsi3",
+            "servizio": "xList",
+            "stileDiv": "mono",
+            "template": "default",
+        },
         "type": "generic",
-        "ssl": True,
+        "ssl": False,   # http, non https
         "region_filter": False,
     },
     {
+        # SIRM — aggiornato, specifico per radiologia, filtra per Abruzzo
         "name": "SIRM — Società Italiana Radiologia Medica",
         "url": "https://sirm.org/concorsi-2/",
         "type": "generic",
         "ssl": True,
-        "region_filter": True,   # nazionale → filtriamo per Abruzzo
+        "region_filter": True,
     },
     {
+        # FNO TSRM — rubrica settimanale concorsi radiologia, filtra per Abruzzo
         "name": "FNO TSRM — Rubrica Concorsi",
         "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/",
-        "type": "generic",
-        "ssl": True,
-        "region_filter": True,
-    },
-    {
-        "name": "ConcorsiPubblici.com — Radiologo",
-        "url": "https://www.concorsipubblici.com/concorsi-radiologo.htm",
-        "type": "generic",
-        "ssl": True,
-        "region_filter": True,
-    },
-    {
-        "name": "Concorsi.it — Radiologia",
-        "url": "https://www.concorsi.it/risultati?ric=radiologia",
         "type": "generic",
         "ssl": True,
         "region_filter": True,
@@ -185,17 +175,17 @@ MONTHS_IT = {
 }
 
 DATE_PATTERNS = [
-    (r'\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b',  "dmy"),
-    (r'\b(20\d{2})-(\d{2})-(\d{2})\b',             "iso"),
+    (r'\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b', "dmy"),
+    (r'\b(20\d{2})-(\d{2})-(\d{2})\b',            "iso"),
     (r'\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|'
      r'luglio|agosto|settembre|ottobre|novembre|dicembre)\s+(20\d{2})\b', "it"),
 ]
 
 
 def extract_date(text: str) -> date | None:
-    text_lower = text.lower()
+    t = text.lower()
     for pattern, fmt in DATE_PATTERNS:
-        m = re.search(pattern, text_lower)
+        m = re.search(pattern, t)
         if not m:
             continue
         try:
@@ -213,10 +203,9 @@ def extract_date(text: str) -> date | None:
 
 
 def is_recent(text: str) -> bool:
-    """True se il bando è >= BOT_START_DATE, o se non si riesce ad estrarre la data."""
     found = extract_date(text)
     if found is None:
-        return True  # nessuna data trovata → lascia passare per sicurezza
+        return True
     if found >= BOT_START_DATE:
         return True
     log.info(f"  Ignorato (data {found} < {BOT_START_DATE}): {text[:50]}")
@@ -245,6 +234,7 @@ def load_health() -> dict:
         "source_alert_dates":     {},
         "total_runs":             0,
         "last_successful_scrape": "",
+        "active_bandi_count":     0,   # bandi attivi trovati oggi
     }
     if os.path.exists(HEALTH_FILE):
         with open(HEALTH_FILE) as f:
@@ -323,7 +313,11 @@ def is_abruzzo(text: str) -> bool:
 
 
 def scrape_generic(source: dict) -> list[dict] | None:
-    soup = fetch(source["url"], ssl_verify=source.get("ssl", True))
+    soup = fetch(
+        source["url"],
+        params=source.get("params"),
+        ssl_verify=source.get("ssl", True)
+    )
     if not soup:
         return None
 
@@ -334,29 +328,22 @@ def scrape_generic(source: dict) -> list[dict] | None:
         title = a.get_text(separator=" ", strip=True)
         href  = a["href"]
 
-        if not title or len(title) < 10:
-            continue
-        if not is_relevant(title):
+        if not title or len(title) < 10 or not is_relevant(title):
             continue
 
-        # Per sorgenti nazionali filtra anche per regione
-        # Cerca il testo nel contesto circostante (riga/paragrafo)
-        parent_text = ""
+        # Testo di contesto (riga/paragrafo circostante)
         parent = a.parent
-        if parent:
-            parent_text = parent.get_text(separator=" ", strip=True)
-        context = f"{title} {parent_text}"
+        context = f"{title} {parent.get_text(separator=' ', strip=True) if parent else ''}"
 
+        # Filtro regione per sorgenti nazionali
         if region_filter and not is_abruzzo(context):
             continue
 
-        # Filtro data sul contesto
+        # Filtro data
         if not is_recent(context):
             continue
 
         full_url = href if href.startswith("http") else urljoin(source["url"], href)
-
-        # Estrai data per mostrarla nel messaggio
         found_date = extract_date(context)
         date_str   = found_date.strftime("%d/%m/%Y") if found_date else datetime.now().strftime("%d/%m/%Y")
 
@@ -389,24 +376,34 @@ def fmt_bando(c: dict) -> str:
     )
 
 
-def fmt_health_with_news(news: dict) -> str:
+def fmt_health(new_today: int, total_active: int, news: dict | None) -> str:
+    """
+    Messaggio giornaliero con:
+    - nuovi bandi trovati oggi
+    - totale bandi attivi dal 25/03/2026
+    - news del giorno (se disponibile)
+    """
     oggi = datetime.now().strftime("%d/%m/%Y")
-    return (
-        f"☀️ *{oggi} — Nessun nuovo concorso oggi*\n\n"
-        f"📰 *News dal mondo della radiologia*\n\n"
-        f"*{news['title']}*\n"
-        f"_{news['source']}_\n\n"
-        f"👉 [Leggi l'articolo]({news['url']})"
-    )
 
+    if new_today > 0:
+        bandi_line = f"📋 *Nuovi bandi oggi:* {new_today} — vedi sopra"
+    else:
+        bandi_line = "📋 *Nuovi bandi oggi:* nessuno"
 
-def fmt_health_no_news() -> str:
-    oggi = datetime.now().strftime("%d/%m/%Y")
-    return (
-        f"☀️ *{oggi} — Nessun nuovo concorso oggi*\n\n"
-        "_Tutti i portali sono stati controllati. "
-        "Ti avviseremo non appena uscirà un bando._"
-    )
+    totale_line = f"📂 *Bandi attivi dal 25/03/2026:* {total_active}"
+
+    base = f"☀️ *{oggi}*\n\n{bandi_line}\n{totale_line}"
+
+    if news:
+        base += (
+            f"\n\n─────────────────\n"
+            f"📰 *News dal mondo della radiologia*\n\n"
+            f"*{news['title']}*\n"
+            f"_{news['source']}_\n\n"
+            f"👉 [Leggi l'articolo]({news['url']})"
+        )
+
+    return base
 
 
 def fmt_source_alert(source_name: str) -> str:
@@ -443,7 +440,7 @@ async def main():
         return
 
     log.info("═══ Avvio bot concorsi radiologi Abruzzo ═══")
-    log.info(f"Filtro data: ignoro bandi precedenti al {BOT_START_DATE}")
+    log.info(f"Filtro data attivo: ignoro bandi precedenti al {BOT_START_DATE}")
 
     seen  = load_seen()
     state = load_health()
@@ -452,9 +449,11 @@ async def main():
     state["total_runs"] += 1
     if "source_alert_dates" not in state:
         state["source_alert_dates"] = {}
+    if "active_bandi_count" not in state:
+        state["active_bandi_count"] = 0
 
-    today     = today_str()
-    new_count = 0
+    today         = today_str()
+    new_today     = 0   # bandi NUOVI trovati in questa run
 
     # ── Scraping concorsi ──────────────────────
     for source in SOURCES:
@@ -482,28 +481,26 @@ async def main():
                 log.info(f"  🆕 {c['title'][:60]}")
                 await send_msg(bot, fmt_bando(c))
                 seen.add(cid)
-                new_count += 1
+                new_today += 1
+                state["active_bandi_count"] += 1
                 await asyncio.sleep(1.5)
 
         await asyncio.sleep(2)
 
-    log.info(f"Nuovi bandi notificati: {new_count}")
+    log.info(f"Nuovi bandi notificati oggi: {new_today}")
+    log.info(f"Totale bandi attivi dal {BOT_START_DATE}: {state['active_bandi_count']}")
 
     # ── Health check giornaliero ───────────────
-    if state["last_health_check"] != today and new_count == 0:
+    # Inviato UNA VOLTA al giorno, SEMPRE, indipendentemente dai bandi trovati
+    if state["last_health_check"] != today:
         log.info("Recupero news radiologia del giorno...")
         news = get_daily_news()
-        if news:
-            await send_msg(bot, fmt_health_with_news(news))
-        else:
-            await send_msg(bot, fmt_health_no_news())
+        await send_msg(bot, fmt_health(new_today, state["active_bandi_count"], news))
         state["last_health_check"] = today
-    elif new_count > 0:
-        state["last_health_check"] = today
+        state["last_successful_scrape"] = today
     else:
         log.info("Health check già inviato oggi — skip")
 
-    state["last_successful_scrape"] = today
     save_seen(seen)
     save_health(state)
     log.info("═══ Fine run ═══")
