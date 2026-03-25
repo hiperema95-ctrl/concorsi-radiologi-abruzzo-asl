@@ -4,31 +4,29 @@ Bot Telegram - Concorsi Pubblici Medici Radiologi in Abruzzo
 Versione per GitHub Actions: script one-shot, scheduling via cron.
 
 Funzionalità:
-  - Scraping di InPA, ASL abruzzesi, Gazzetta Ufficiale, Regione Abruzzo
-  - Notifica Telegram per ogni nuovo bando rilevato
-  - Health check ogni 24h: verifica che il bot stia girando correttamente
-  - Alert anti-spam: se il bot non riesce a prelevare info da NESSUNA sorgente,
-    manda UN SOLO messaggio di allerta ogni 24h
+  - Scraping concorsi: InPA, ASL abruzzesi, Gazzetta Ufficiale, Regione Abruzzo
+  - Notifica immediata per ogni nuovo bando trovato
+  - Health check giornaliero con notizia dal mondo della radiologia
+    (presa gratuitamente da ESR / RSNA / AuntMinnie / Radiology Today)
+  - Alert se UNA QUALSIASI sorgente concorsi non risponde (max 1 alert/giorno per sorgente)
 
-Secrets da configurare su GitHub (Settings → Secrets → Actions):
-  TELEGRAM_TOKEN  →  token del bot da @BotFather
-  CHAT_ID         →  il tuo chat ID da @userinfobot
+Secrets GitHub richiesti:
+  TELEGRAM_TOKEN  →  token del bot (@BotFather)
+  CHAT_ID         →  chat ID personale o canale (-100xxx)
 """
 
 import os
 import json
-import time
 import logging
 import hashlib
 import asyncio
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, date
+from urllib.parse import urljoin
 from telegram import Bot
 from telegram.constants import ParseMode
 
-# ─────────────────────────────────────────────
-# Credenziali da GitHub Secrets (env vars)
 # ─────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID        = os.environ.get("CHAT_ID", "")
@@ -36,13 +34,9 @@ CHAT_ID        = os.environ.get("CHAT_ID", "")
 SEEN_FILE   = "seen_concorsi.json"
 HEALTH_FILE = "health_state.json"
 
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    level=logging.INFO,
-)
+logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# SSL verify disabilitato per siti con certificati scaduti (ASL3, Regione)
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -62,19 +56,23 @@ REGION_KEYWORDS = [
     "asl abruzzo", "asl lanciano", "asl avezzano", "asl sulmona",
 ]
 
-# URL aggiornati e verificati
+# ──────────────────────────────────────────────
+# SORGENTI CONCORSI
+# ──────────────────────────────────────────────
 SOURCES = [
     {
-        "name": "InPA — Portale Concorsi PA",
+        "name": "InPA — radiologo",
         "url": "https://www.inpa.gov.it/concorsi-pubblici/",
         "type": "inpa",
         "params": {"keyword": "radiologo", "regione": "Abruzzo"},
+        "ssl": True,
     },
     {
-        "name": "InPA — Ricerca radiologia",
+        "name": "InPA — radiologia",
         "url": "https://www.inpa.gov.it/concorsi-pubblici/",
         "type": "inpa",
         "params": {"keyword": "radiologia", "regione": "Abruzzo"},
+        "ssl": True,
     },
     {
         "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
@@ -92,7 +90,7 @@ SOURCES = [
         "name": "ASL 3 Pescara",
         "url": "https://www.ausl.pe.it/index.php/albo-pretorio",
         "type": "generic",
-        "ssl": False,   # certificato SSL scaduto — disabilitiamo verify
+        "ssl": False,
     },
     {
         "name": "ASL 4 Teramo",
@@ -104,26 +102,68 @@ SOURCES = [
         "name": "Regione Abruzzo — Bandi",
         "url": "https://www.regione.abruzzo.it/content/bandi-e-concorsi",
         "type": "generic",
-        "ssl": False,   # certificato SSL scaduto — disabilitiamo verify
+        "ssl": False,
     },
     {
-        "name": "Gazzetta Ufficiale — Concorsi",
+        "name": "Gazzetta Ufficiale",
         "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata?q=radiologo+abruzzo",
         "type": "gazzetta",
         "ssl": True,
     },
+]
+
+# ──────────────────────────────────────────────
+# SORGENTI NEWS RADIOLOGIA (gratuite, pubbliche)
+# ──────────────────────────────────────────────
+NEWS_SOURCES = [
     {
-        # Backup: portale mobilità SSN con filtro radiologia
-        "name": "Mobilità SSN — Radiologia",
-        "url": "https://www.ilsole24ore.com/motore-ricerca/risultati?q=concorso+radiologo+abruzzo&topic=salute",
-        "type": "generic",
+        "name": "ESR — European Society of Radiology",
+        "url": "https://www.myesr.org/news",
+        "selector": "article a, .news-item a, h2 a, h3 a",
+        "base": "https://www.myesr.org",
+        "ssl": True,
+    },
+    {
+        "name": "RSNA News",
+        "url": "https://www.rsna.org/news",
+        "selector": "article a, .news-card a, h2 a, h3 a",
+        "base": "https://www.rsna.org",
+        "ssl": True,
+    },
+    {
+        "name": "AuntMinnie",
+        "url": "https://www.auntminnie.com/index.aspx?sec=nws",
+        "selector": "a.article-title, h2 a, h3 a, .headline a",
+        "base": "https://www.auntminnie.com",
+        "ssl": True,
+    },
+    {
+        "name": "Radiology Today",
+        "url": "https://www.radiologytoday.net",
+        "selector": ".entry-title a, h2 a, h3 a, article a",
+        "base": "https://www.radiologytoday.net",
+        "ssl": True,
+    },
+    {
+        "name": "Imaging Technology News",
+        "url": "https://www.itnonline.com/channel/radiology",
+        "selector": "h2 a, h3 a, .article-title a",
+        "base": "https://www.itnonline.com",
         "ssl": True,
     },
 ]
 
+NEWS_KEYWORDS = [
+    "ai", "artificial intelligence", "machine learning",
+    "mri", "ct", "ultrasound", "x-ray", "pet",
+    "radiology", "imaging", "diagnostic",
+    "cancer", "tumor", "detection", "scan",
+    "innovation", "breakthrough", "study", "research", "trial",
+]
+
 
 # ══════════════════════════════════════════════
-# GESTIONE STATO
+# STATO
 # ══════════════════════════════════════════════
 
 def load_seen() -> set:
@@ -141,8 +181,7 @@ def save_seen(seen: set):
 def load_health() -> dict:
     defaults = {
         "last_health_check":      "",
-        "last_alert_date":        "",
-        "consecutive_failures":   0,
+        "source_alert_dates":     {},   # {nome_sorgente: "YYYY-MM-DD"}
         "total_runs":             0,
         "last_successful_scrape": "",
     }
@@ -167,23 +206,12 @@ def today_str() -> str:
 
 
 # ══════════════════════════════════════════════
-# SCRAPING
+# SCRAPING NEWS RADIOLOGIA (gratis)
 # ══════════════════════════════════════════════
-
-def is_relevant(text: str) -> bool:
-    t = text.lower()
-    return any(kw in t for kw in KEYWORDS)
-
 
 def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSoup | None:
     try:
-        resp = requests.get(
-            url,
-            headers=HEADERS,
-            params=params,
-            timeout=25,
-            verify=ssl_verify,
-        )
+        resp = requests.get(url, headers=HEADERS, params=params, timeout=25, verify=ssl_verify)
         resp.raise_for_status()
         return BeautifulSoup(resp.text, "lxml")
     except Exception as e:
@@ -191,40 +219,72 @@ def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSo
         return None
 
 
+def get_daily_news() -> dict | None:
+    """
+    Cerca la prima notizia rilevante nei siti di radiologia internazionali.
+    Scorre le sorgenti nell'ordine finché non trova qualcosa di pertinente.
+    """
+    for ns in NEWS_SOURCES:
+        soup = fetch(ns["url"], ssl_verify=ns.get("ssl", True))
+        if not soup:
+            continue
+        for a in soup.select(ns["selector"]):
+            title = a.get_text(separator=" ", strip=True)
+            href  = a.get("href", "")
+            if not title or len(title) < 20:
+                continue
+            if not any(kw in title.lower() for kw in NEWS_KEYWORDS):
+                continue
+            # Normalizza URL
+            if href.startswith("http"):
+                full_url = href
+            elif href.startswith("/"):
+                full_url = ns["base"] + href
+            else:
+                continue
+            log.info(f"News trovata [{ns['name']}]: {title[:70]}")
+            return {"title": title, "url": full_url, "source": ns["name"]}
+
+    log.warning("Nessuna news trovata — uso messaggio di fallback")
+    return None
+
+
+# ══════════════════════════════════════════════
+# SCRAPING CONCORSI
+# ══════════════════════════════════════════════
+
+def is_relevant(text: str) -> bool:
+    return any(kw in text.lower() for kw in KEYWORDS)
+
+
 def scrape_generic(source: dict) -> list[dict] | None:
-    ssl = source.get("ssl", True)
-    soup = fetch(source["url"], ssl_verify=ssl)
+    soup = fetch(source["url"], ssl_verify=source.get("ssl", True))
     if not soup:
-        return None   # None = sorgente non raggiunta (diverso da lista vuota)
+        return None   # None = sorgente irraggiungibile
     results = []
     for a in soup.find_all("a", href=True):
         title = a.get_text(separator=" ", strip=True)
         href  = a["href"]
         if not title or len(title) < 10 or not is_relevant(title):
             continue
-        if href.startswith("http"):
-            full_url = href
-        else:
-            from urllib.parse import urljoin
-            full_url = urljoin(source["url"], href)
+        full_url = href if href.startswith("http") else urljoin(source["url"], href)
         results.append({
             "title":  title,
             "url":    full_url,
             "source": source["name"],
             "date":   datetime.now().strftime("%d/%m/%Y"),
         })
-    log.info(f"  [{source['name']}] {len(results)} risultati")
+    log.info(f"  [{source['name']}] {len(results)} risultati rilevanti")
     return results   # [] = raggiunta ma nessun bando rilevante
 
 
 def scrape_inpa(source: dict) -> list[dict] | None:
-    params = source.get("params", {})
-    soup   = fetch(source["url"], params=params, ssl_verify=True)
+    soup = fetch(source["url"], params=source.get("params", {}))
     if not soup:
         return None
     cards = soup.select(".concorso-card, .bando-item, article.bando, .card-concorso, li.bando")
     if not cards:
-        return scrape_generic({**source, "url": source["url"]})
+        return scrape_generic(source)
     results = []
     for card in cards:
         title_el = card.select_one("h2, h3, h4, .title, .titolo, .nome-bando")
@@ -232,53 +292,45 @@ def scrape_inpa(source: dict) -> list[dict] | None:
         if not title_el or not link_el:
             continue
         title = title_el.get_text(strip=True)
-        href  = link_el["href"]
         if not is_relevant(title):
             continue
+        href     = link_el["href"]
         full_url = href if href.startswith("http") else f"https://www.inpa.gov.it{href}"
         date_el  = card.select_one(".date, .data, time, .scadenza")
-        date_str = date_el.get_text(strip=True) if date_el else datetime.now().strftime("%d/%m/%Y")
         results.append({
             "title":  title,
             "url":    full_url,
             "source": source["name"],
-            "date":   date_str,
+            "date":   date_el.get_text(strip=True) if date_el else datetime.now().strftime("%d/%m/%Y"),
         })
-    log.info(f"  [InPA] {len(results)} bandi")
     return results
 
 
 def scrape_gazzetta(source: dict) -> list[dict] | None:
-    soup = fetch(source["url"], ssl_verify=True)
+    soup = fetch(source["url"])
     if not soup:
         return None
     results = []
     for row in soup.select("tr, .risultato, .atto, article"):
         text    = row.get_text(separator=" ", strip=True)
         link_el = row.select_one("a[href]")
-        if not is_relevant(text):
-            continue
-        if not any(rk in text.lower() for rk in REGION_KEYWORDS):
+        if not is_relevant(text) or not any(rk in text.lower() for rk in REGION_KEYWORDS):
             continue
         href     = link_el["href"] if link_el else source["url"]
         full_url = href if href.startswith("http") else f"https://www.gazzettaufficiale.it{href}"
-        title    = link_el.get_text(strip=True) if link_el else text[:120]
         results.append({
-            "title":  title,
+            "title":  link_el.get_text(strip=True) if link_el else text[:120],
             "url":    full_url,
             "source": source["name"],
             "date":   datetime.now().strftime("%d/%m/%Y"),
         })
-    log.info(f"  [Gazzetta] {len(results)} bandi")
     return results
 
 
 def scrape_source(source: dict) -> list[dict] | None:
     t = source.get("type", "generic")
-    if t == "inpa":
-        return scrape_inpa(source)
-    elif t == "gazzetta":
-        return scrape_gazzetta(source)
+    if t == "inpa":     return scrape_inpa(source)
+    if t == "gazzetta": return scrape_gazzetta(source)
     return scrape_generic(source)
 
 
@@ -288,43 +340,45 @@ def scrape_source(source: dict) -> list[dict] | None:
 
 def fmt_bando(c: dict) -> str:
     return (
-        "🏥 *Nuovo Concorso — Radiologo Abruzzo*\n\n"
-        f"📋 *Titolo:* {c['title']}\n"
-        f"🏛 *Fonte:* {c['source']}\n"
-        f"📅 *Rilevato il:* {c['date']}\n"
-        f"🔗 [Apri il bando]({c['url']})"
+        "🏥 *Nuovo concorso — Radiologo Abruzzo*\n\n"
+        f"📋 *{c['title']}*\n\n"
+        f"🏛 {c['source']}\n"
+        f"📅 {c['date']}\n\n"
+        f"👉 [Apri il bando]({c['url']})"
     )
 
 
-def fmt_health(state: dict, sources_ok: int, sources_total: int, new_count: int) -> str:
-    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+def fmt_health_with_news(news: dict) -> str:
+    oggi = datetime.now().strftime("%d/%m/%Y")
     return (
-        "✅ *Health Check — Bot Concorsi Radiologi*\n\n"
-        f"🕐 *Data/ora:* {now}\n"
-        f"📡 *Sorgenti raggiunte:* {sources_ok}/{sources_total}\n"
-        f"📋 *Nuovi bandi oggi:* {new_count}\n"
-        f"🔄 *Run totali:* {state['total_runs']}\n"
-        f"📅 *Ultimo scrape OK:* {state['last_successful_scrape'] or 'mai'}\n\n"
-        "_Il bot sta funzionando correttamente._"
+        f"☀️ *{oggi} — Nessun nuovo concorso oggi*\n\n"
+        f"📰 *News dal mondo della radiologia*\n\n"
+        f"*{news['title']}*\n"
+        f"_{news['source']}_\n\n"
+        f"👉 [Leggi l'articolo]({news['url']})"
     )
 
 
-def fmt_alert(state: dict, failed_sources: list[str]) -> str:
-    now = datetime.now().strftime("%d/%m/%Y %H:%M")
-    failed_list = "\n".join(f"  • {s}" for s in failed_sources)
+def fmt_health_no_news() -> str:
+    oggi = datetime.now().strftime("%d/%m/%Y")
     return (
-        "⚠️ *ALERT — Bot Concorsi Radiologi*\n\n"
-        f"🕐 *Rilevato alle:* {now}\n"
-        f"❌ *Problema:* impossibile prelevare dati da nessuna sorgente\n\n"
-        f"*Sorgenti non raggiungibili:*\n{failed_list}\n\n"
-        f"📊 *Run consecutive fallite:* {state['consecutive_failures']}\n"
-        f"📅 *Ultimo scrape riuscito:* {state['last_successful_scrape'] or 'mai'}\n\n"
-        "_Controlla la scheda Actions su GitHub per i dettagli._"
+        f"☀️ *{oggi} — Nessun nuovo concorso oggi*\n\n"
+        "_Tutti i portali sono stati controllati. "
+        "Ti avviseremo non appena uscirà un bando._"
+    )
+
+
+def fmt_source_alert(source_name: str) -> str:
+    oggi = datetime.now().strftime("%d/%m/%Y")
+    return (
+        f"⚠️ *Sorgente offline — {oggi}*\n\n"
+        f"❌ *{source_name}*\n\n"
+        "_Questo portale non è raggiungibile. "
+        "I suoi bandi potrebbero non essere monitorati fino al ripristino._"
     )
 
 
 async def send_msg(bot: Bot, text: str):
-    """Supporta più destinatari separati da virgola nel CHAT_ID."""
     ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
     for cid in ids:
         try:
@@ -332,44 +386,10 @@ async def send_msg(bot: Bot, text: str):
                 chat_id=cid,
                 text=text,
                 parse_mode=ParseMode.MARKDOWN,
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
         except Exception as e:
             log.error(f"Errore invio Telegram a {cid}: {e}")
-
-
-# ══════════════════════════════════════════════
-# LOGICA HEALTH CHECK
-# ══════════════════════════════════════════════
-
-async def handle_health_and_alerts(
-    bot: Bot,
-    state: dict,
-    sources_ok: int,
-    sources_total: int,
-    failed_sources: list[str],
-    new_count: int,
-):
-    today      = today_str()
-    all_failed = (sources_ok == 0)
-
-    if all_failed:
-        state["consecutive_failures"] += 1
-        if state["last_alert_date"] != today:
-            log.warning(f"Nessuna sorgente raggiungibile — invio alert")
-            await send_msg(bot, fmt_alert(state, failed_sources))
-            state["last_alert_date"] = today
-        else:
-            log.info("Alert già inviato oggi — skip (anti-spam)")
-    else:
-        state["consecutive_failures"]   = 0
-        state["last_successful_scrape"] = today
-        if state["last_health_check"] != today:
-            log.info("Invio daily health check")
-            await send_msg(bot, fmt_health(state, sources_ok, sources_total, new_count))
-            state["last_health_check"] = today
-        else:
-            log.info("Health check già inviato oggi — skip")
 
 
 # ══════════════════════════════════════════════
@@ -378,39 +398,48 @@ async def handle_health_and_alerts(
 
 async def main():
     if not TELEGRAM_TOKEN or not CHAT_ID:
-        log.error("TELEGRAM_TOKEN o CHAT_ID mancanti! Configura i GitHub Secrets.")
+        log.error("TELEGRAM_TOKEN o CHAT_ID mancanti!")
         return
 
     log.info("═══ Avvio bot concorsi radiologi Abruzzo ═══")
 
-    seen   = load_seen()
-    state  = load_health()
-    bot    = Bot(token=TELEGRAM_TOKEN)
+    seen  = load_seen()
+    state = load_health()
+    bot   = Bot(token=TELEGRAM_TOKEN)
 
     state["total_runs"] += 1
-    log.info(f"Run #{state['total_runs']} — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    if "source_alert_dates" not in state:
+        state["source_alert_dates"] = {}
 
-    new_count      = 0
-    sources_ok     = 0
-    failed_sources = []
+    today     = today_str()
+    new_count = 0
 
+    # ── Scraping concorsi ────────────────────────────────────
     for source in SOURCES:
-        log.info(f"→ Controllo: {source['name']}")
+        log.info(f"→ {source['name']}")
         try:
             concorsi = scrape_source(source)
         except Exception as e:
-            log.error(f"  Errore scraping: {e}")
+            log.error(f"  Errore: {e}")
             concorsi = None
 
+        # Sorgente irraggiungibile → alert (max 1 al giorno per sorgente)
         if concorsi is None:
-            failed_sources.append(source["name"])
+            last = state["source_alert_dates"].get(source["name"], "")
+            if last != today:
+                log.warning(f"Sorgente offline: {source['name']}")
+                await send_msg(bot, fmt_source_alert(source["name"]))
+                state["source_alert_dates"][source["name"]] = today
+            else:
+                log.info(f"  Alert già inviato oggi per '{source['name']}' — skip")
             await asyncio.sleep(2)
             continue
 
-        sources_ok += 1
+        # Nuovi bandi → notifica immediata
         for c in concorsi:
             cid = make_id(c["title"], c["url"])
             if cid not in seen:
+                log.info(f"  🆕 {c['title'][:60]}")
                 await send_msg(bot, fmt_bando(c))
                 seen.add(cid)
                 new_count += 1
@@ -418,17 +447,28 @@ async def main():
 
         await asyncio.sleep(2)
 
-    log.info(f"Scraping completato — sorgenti OK: {sources_ok}/{len(SOURCES)}, nuovi bandi: {new_count}")
+    log.info(f"Nuovi bandi notificati: {new_count}")
 
-    await handle_health_and_alerts(
-        bot=bot,
-        state=state,
-        sources_ok=sources_ok,
-        sources_total=len(SOURCES),
-        failed_sources=failed_sources,
-        new_count=new_count,
-    )
+    # ── Health check giornaliero ─────────────────────────────
+    # Una volta al giorno, se non ci sono stati nuovi bandi, manda la news
+    if state["last_health_check"] != today and new_count == 0:
+        log.info("Recupero news radiologia del giorno...")
+        news = get_daily_news()
+        if news:
+            await send_msg(bot, fmt_health_with_news(news))
+        else:
+            await send_msg(bot, fmt_health_no_news())
+        state["last_health_check"] = today
 
+    elif new_count > 0:
+        # Ha già mandato bandi: segna la data senza un messaggio extra
+        state["last_health_check"] = today
+        state["last_successful_scrape"] = today
+
+    else:
+        log.info("Health check già inviato oggi — skip")
+
+    state["last_successful_scrape"] = today
     save_seen(seen)
     save_health(state)
     log.info("═══ Fine run ═══")
