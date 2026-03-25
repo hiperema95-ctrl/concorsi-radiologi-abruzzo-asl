@@ -6,9 +6,10 @@
     "ASL 2 Lanciano-Vasto-Chieti": "2026-03-25",
     "ASL 3 Pescara": "2026-03-25",
     "Regione Abruzzo \u2014 Bandi": "2026-03-25",
-    "InPA \u2014 Portale Nazionale Concorsi": "2026-03-25"
+    "InPA \u2014 Portale Nazionale Concorsi": "2026-03-25",
+    "Regione Abruzzo \u2014 Concorsi": "2026-03-25"
   },
-  "total_runs": 6,
+  "total_runs": 7,
   "last_successful_scrape": "2026-03-25",
   "last_alert_date": "",
   "consecutive_failures": 0
