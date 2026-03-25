@@ -8,7 +8,7 @@ Funzionalità:
   - Notifica Telegram per ogni nuovo bando rilevato
   - Health check ogni 24h: verifica che il bot stia girando correttamente
   - Alert anti-spam: se il bot non riesce a prelevare info da NESSUNA sorgente,
-    manda UN SOLO messaggio di allerta ogni 24h (non uno per ogni run)
+    manda UN SOLO messaggio di allerta ogni 24h
 
 Secrets da configurare su GitHub (Settings → Secrets → Actions):
   TELEGRAM_TOKEN  →  token del bot da @BotFather
@@ -33,9 +33,8 @@ from telegram.constants import ParseMode
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID        = os.environ.get("CHAT_ID", "")
 
-# File di stato (committati nel repo per persistere tra le run)
-SEEN_FILE       = "seen_concorsi.json"    # bandi già notificati
-HEALTH_FILE     = "health_state.json"     # stato health check
+SEEN_FILE   = "seen_concorsi.json"
+HEALTH_FILE = "health_state.json"
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -43,6 +42,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# SSL verify disabilitato per siti con certificati scaduti (ASL3, Regione)
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -62,46 +62,62 @@ REGION_KEYWORDS = [
     "asl abruzzo", "asl lanciano", "asl avezzano", "asl sulmona",
 ]
 
+# URL aggiornati e verificati
 SOURCES = [
     {
-        "name": "InPA — radiologo abruzzo",
-        "url": "https://www.inpa.gov.it/concorsi/?search=radiologo+abruzzo",
+        "name": "InPA — Portale Concorsi PA",
+        "url": "https://www.inpa.gov.it/concorsi-pubblici/",
         "type": "inpa",
+        "params": {"keyword": "radiologo", "regione": "Abruzzo"},
     },
     {
-        "name": "InPA — radiologia abruzzo",
-        "url": "https://www.inpa.gov.it/concorsi/?search=radiologia&regione=abruzzo",
+        "name": "InPA — Ricerca radiologia",
+        "url": "https://www.inpa.gov.it/concorsi-pubblici/",
         "type": "inpa",
+        "params": {"keyword": "radiologia", "regione": "Abruzzo"},
     },
     {
         "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
-        "url": "https://www.asl1abruzzo.it/bandi-concorsi.html",
+        "url": "https://www.asl1abruzzo.it/index.php/albo-on-line",
         "type": "generic",
+        "ssl": True,
     },
     {
         "name": "ASL 2 Lanciano-Vasto-Chieti",
-        "url": "https://www.asl2abruzzo.it/concorsi-e-avvisi.html",
+        "url": "https://www.asl2abruzzo.it/index.php/albo-online",
         "type": "generic",
+        "ssl": True,
     },
     {
         "name": "ASL 3 Pescara",
-        "url": "https://www.ausl.pe.it/index.php/concorsi-e-avvisi",
+        "url": "https://www.ausl.pe.it/index.php/albo-pretorio",
         "type": "generic",
+        "ssl": False,   # certificato SSL scaduto — disabilitiamo verify
     },
     {
         "name": "ASL 4 Teramo",
         "url": "https://www.aslteramo.it/concorsi",
         "type": "generic",
+        "ssl": True,
     },
     {
-        "name": "Regione Abruzzo — Concorsi",
-        "url": "https://www.regione.abruzzo.it/content/concorsi",
+        "name": "Regione Abruzzo — Bandi",
+        "url": "https://www.regione.abruzzo.it/content/bandi-e-concorsi",
         "type": "generic",
+        "ssl": False,   # certificato SSL scaduto — disabilitiamo verify
     },
     {
-        "name": "Gazzetta Ufficiale",
+        "name": "Gazzetta Ufficiale — Concorsi",
         "url": "https://www.gazzettaufficiale.it/ricerca/concorsi/ricercaAvanzata?q=radiologo+abruzzo",
         "type": "gazzetta",
+        "ssl": True,
+    },
+    {
+        # Backup: portale mobilità SSN con filtro radiologia
+        "name": "Mobilità SSN — Radiologia",
+        "url": "https://www.ilsole24ore.com/motore-ricerca/risultati?q=concorso+radiologo+abruzzo&topic=salute",
+        "type": "generic",
+        "ssl": True,
     },
 ]
 
@@ -123,21 +139,11 @@ def save_seen(seen: set):
 
 
 def load_health() -> dict:
-    """
-    Struttura dello stato health:
-    {
-      "last_health_check": "2024-01-15",   // data dell'ultimo heartbeat inviato
-      "last_alert_date":   "2024-01-15",   // data dell'ultimo alert di errore inviato
-      "consecutive_failures": 3,           // run consecutive senza dati
-      "total_runs": 42,                    // totale esecuzioni
-      "last_successful_scrape": "2024-01-14"  // ultima run con almeno 1 sorgente OK
-    }
-    """
     defaults = {
-        "last_health_check":    "",
-        "last_alert_date":      "",
-        "consecutive_failures": 0,
-        "total_runs":           0,
+        "last_health_check":      "",
+        "last_alert_date":        "",
+        "consecutive_failures":   0,
+        "total_runs":             0,
         "last_successful_scrape": "",
     }
     if os.path.exists(HEALTH_FILE):
@@ -157,7 +163,7 @@ def make_id(title: str, url: str) -> str:
 
 
 def today_str() -> str:
-    return date.today().isoformat()   # "YYYY-MM-DD"
+    return date.today().isoformat()
 
 
 # ══════════════════════════════════════════════
@@ -169,9 +175,15 @@ def is_relevant(text: str) -> bool:
     return any(kw in t for kw in KEYWORDS)
 
 
-def fetch(url: str) -> BeautifulSoup | None:
+def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSoup | None:
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp = requests.get(
+            url,
+            headers=HEADERS,
+            params=params,
+            timeout=25,
+            verify=ssl_verify,
+        )
         resp.raise_for_status()
         return BeautifulSoup(resp.text, "lxml")
     except Exception as e:
@@ -179,10 +191,11 @@ def fetch(url: str) -> BeautifulSoup | None:
         return None
 
 
-def scrape_generic(source: dict) -> list[dict]:
-    soup = fetch(source["url"])
+def scrape_generic(source: dict) -> list[dict] | None:
+    ssl = source.get("ssl", True)
+    soup = fetch(source["url"], ssl_verify=ssl)
     if not soup:
-        return []
+        return None   # None = sorgente non raggiunta (diverso da lista vuota)
     results = []
     for a in soup.find_all("a", href=True):
         title = a.get_text(separator=" ", strip=True)
@@ -201,19 +214,20 @@ def scrape_generic(source: dict) -> list[dict]:
             "date":   datetime.now().strftime("%d/%m/%Y"),
         })
     log.info(f"  [{source['name']}] {len(results)} risultati")
-    return results
+    return results   # [] = raggiunta ma nessun bando rilevante
 
 
-def scrape_inpa(source: dict) -> list[dict]:
-    soup = fetch(source["url"])
+def scrape_inpa(source: dict) -> list[dict] | None:
+    params = source.get("params", {})
+    soup   = fetch(source["url"], params=params, ssl_verify=True)
     if not soup:
-        return []
-    cards = soup.select(".concorso-card, .bando-item, article, .card")
+        return None
+    cards = soup.select(".concorso-card, .bando-item, article.bando, .card-concorso, li.bando")
     if not cards:
-        return scrape_generic(source)
+        return scrape_generic({**source, "url": source["url"]})
     results = []
     for card in cards:
-        title_el = card.select_one("h2, h3, h4, .title, .titolo")
+        title_el = card.select_one("h2, h3, h4, .title, .titolo, .nome-bando")
         link_el  = card.select_one("a[href]")
         if not title_el or not link_el:
             continue
@@ -222,19 +236,24 @@ def scrape_inpa(source: dict) -> list[dict]:
         if not is_relevant(title):
             continue
         full_url = href if href.startswith("http") else f"https://www.inpa.gov.it{href}"
-        date_el  = card.select_one(".date, .data, time")
+        date_el  = card.select_one(".date, .data, time, .scadenza")
         date_str = date_el.get_text(strip=True) if date_el else datetime.now().strftime("%d/%m/%Y")
-        results.append({"title": title, "url": full_url, "source": source["name"], "date": date_str})
+        results.append({
+            "title":  title,
+            "url":    full_url,
+            "source": source["name"],
+            "date":   date_str,
+        })
     log.info(f"  [InPA] {len(results)} bandi")
     return results
 
 
-def scrape_gazzetta(source: dict) -> list[dict]:
-    soup = fetch(source["url"])
+def scrape_gazzetta(source: dict) -> list[dict] | None:
+    soup = fetch(source["url"], ssl_verify=True)
     if not soup:
-        return []
+        return None
     results = []
-    for row in soup.select("tr, .risultato, .atto"):
+    for row in soup.select("tr, .risultato, .atto, article"):
         text    = row.get_text(separator=" ", strip=True)
         link_el = row.select_one("a[href]")
         if not is_relevant(text):
@@ -244,12 +263,17 @@ def scrape_gazzetta(source: dict) -> list[dict]:
         href     = link_el["href"] if link_el else source["url"]
         full_url = href if href.startswith("http") else f"https://www.gazzettaufficiale.it{href}"
         title    = link_el.get_text(strip=True) if link_el else text[:120]
-        results.append({"title": title, "url": full_url, "source": source["name"], "date": datetime.now().strftime("%d/%m/%Y")})
+        results.append({
+            "title":  title,
+            "url":    full_url,
+            "source": source["name"],
+            "date":   datetime.now().strftime("%d/%m/%Y"),
+        })
     log.info(f"  [Gazzetta] {len(results)} bandi")
     return results
 
 
-def scrape_source(source: dict) -> list[dict]:
+def scrape_source(source: dict) -> list[dict] | None:
     t = source.get("type", "generic")
     if t == "inpa":
         return scrape_inpa(source)
@@ -300,15 +324,18 @@ def fmt_alert(state: dict, failed_sources: list[str]) -> str:
 
 
 async def send_msg(bot: Bot, text: str):
-    try:
-        await bot.send_message(
-            chat_id=CHAT_ID,
-            text=text,
-            parse_mode=ParseMode.MARKDOWN,
-            disable_web_page_preview=True,
-        )
-    except Exception as e:
-        log.error(f"Errore invio Telegram: {e}")
+    """Supporta più destinatari separati da virgola nel CHAT_ID."""
+    ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
+    for cid in ids:
+        try:
+            await bot.send_message(
+                chat_id=cid,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_web_page_preview=True,
+            )
+        except Exception as e:
+            log.error(f"Errore invio Telegram a {cid}: {e}")
 
 
 # ══════════════════════════════════════════════
@@ -323,35 +350,21 @@ async def handle_health_and_alerts(
     failed_sources: list[str],
     new_count: int,
 ):
-    """
-    Regole:
-    1. Health check (report "tutto OK"): inviato una volta ogni 24h
-       solo se ALMENO UNA sorgente ha risposto correttamente.
-    2. Alert errore: inviato una volta ogni 24h se NESSUNA sorgente
-       ha risposto. Non genera spam: max 1 messaggio al giorno.
-    """
-    today = today_str()
+    today      = today_str()
     all_failed = (sources_ok == 0)
 
     if all_failed:
-        # ── Caso errore ────────────────────────────────────────────
         state["consecutive_failures"] += 1
-
         if state["last_alert_date"] != today:
-            # Non abbiamo ancora mandato l'alert oggi → lo mandiamo
-            log.warning(f"Nessuna sorgente raggiungibile. Invio alert (run #{state['consecutive_failures']})")
+            log.warning(f"Nessuna sorgente raggiungibile — invio alert")
             await send_msg(bot, fmt_alert(state, failed_sources))
             state["last_alert_date"] = today
         else:
             log.info("Alert già inviato oggi — skip (anti-spam)")
-
     else:
-        # ── Caso OK ───────────────────────────────────────────────
-        state["consecutive_failures"] = 0
+        state["consecutive_failures"]   = 0
         state["last_successful_scrape"] = today
-
         if state["last_health_check"] != today:
-            # Non abbiamo ancora inviato il daily health check → lo inviamo
             log.info("Invio daily health check")
             await send_msg(bot, fmt_health(state, sources_ok, sources_total, new_count))
             state["last_health_check"] = today
@@ -377,7 +390,6 @@ async def main():
     state["total_runs"] += 1
     log.info(f"Run #{state['total_runs']} — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-    # ── Scraping ──────────────────────────────
     new_count      = 0
     sources_ok     = 0
     failed_sources = []
@@ -386,8 +398,6 @@ async def main():
         log.info(f"→ Controllo: {source['name']}")
         try:
             concorsi = scrape_source(source)
-            if concorsi is not None:  # None = fetch fallito, [] = fetch OK ma niente di rilevante
-                sources_ok += 1
         except Exception as e:
             log.error(f"  Errore scraping: {e}")
             concorsi = None
@@ -397,6 +407,7 @@ async def main():
             await asyncio.sleep(2)
             continue
 
+        sources_ok += 1
         for c in concorsi:
             cid = make_id(c["title"], c["url"])
             if cid not in seen:
@@ -409,7 +420,6 @@ async def main():
 
     log.info(f"Scraping completato — sorgenti OK: {sources_ok}/{len(SOURCES)}, nuovi bandi: {new_count}")
 
-    # ── Health check / Alert ──────────────────
     await handle_health_and_alerts(
         bot=bot,
         state=state,
@@ -419,7 +429,6 @@ async def main():
         new_count=new_count,
     )
 
-    # ── Salva stato ───────────────────────────
     save_seen(seen)
     save_health(state)
     log.info("═══ Fine run ═══")
