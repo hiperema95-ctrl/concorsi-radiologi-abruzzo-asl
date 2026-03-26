@@ -77,12 +77,6 @@ SOURCES = [
         "ssl": True,
     },
     {
-        "name": "Portale Sanità Regione Abruzzo",
-        "url": "https://sanita.regione.abruzzo.it/tags/concorsi",
-        "type": "local",
-        "ssl": True,
-    },
-    {
         "name": "SIRM — Società Italiana Radiologia Medica",
         "url": "https://sirm.org/concorsi-2/",
         "type": "national",
@@ -360,92 +354,4 @@ def fmt_daily(new_today: int, total_active: int, news: dict | None) -> str:
 def fmt_source_alert(source_name: str) -> str:
     oggi = datetime.now().strftime("%d/%m/%Y")
     return (
-        f"⚠️ *Sorgente offline — {oggi}*\n\n"
-        f"❌ *{source_name}*\n\n"
-        "_Questo portale non è raggiungibile. "
-        "I suoi bandi potrebbero non essere monitorati fino al ripristino._"
-    )
-
-
-async def send_msg(bot: Bot, text: str):
-    ids = [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]
-    for cid in ids:
-        try:
-            await bot.send_message(
-                chat_id=cid,
-                text=text,
-                parse_mode=ParseMode.MARKDOWN,
-                disable_web_page_preview=False,
-            )
-        except Exception as e:
-            log.error(f"Errore invio Telegram a {cid}: {e}")
-
-
-async def main():
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        log.error("TELEGRAM_TOKEN o CHAT_ID mancanti!")
-        return
-
-    log.info("═══ Avvio bot concorsi radiologi Abruzzo ═══")
-
-    seen      = load_seen()
-    seen_news = load_seen_news()
-    state     = load_health()
-    bot       = Bot(token=TELEGRAM_TOKEN)
-
-    state["total_runs"] += 1
-    if "source_alert_dates" not in state:
-        state["source_alert_dates"] = {}
-
-    today     = today_str()
-    new_count = 0
-
-    for source in SOURCES:
-        log.info(f"→ {source['name']}")
-        try:
-            concorsi = scrape_source(source)
-        except Exception as e:
-            log.error(f"  Errore: {e}")
-            concorsi = None
-
-        if concorsi is None:
-            last = state["source_alert_dates"].get(source["name"], "")
-            if last != today:
-                log.warning(f"Sorgente offline: {source['name']}")
-                await send_msg(bot, fmt_source_alert(source["name"]))
-                state["source_alert_dates"][source["name"]] = today
-            else:
-                log.info(f"  Alert già inviato oggi — skip")
-            await asyncio.sleep(2)
-            continue
-
-        for c in concorsi:
-            cid = make_id(c["title"], c["url"])
-            if cid not in seen:
-                log.info(f"  🆕 {c['title'][:60]}")
-                await send_msg(bot, fmt_bando(c))
-                seen.add(cid)
-                new_count += 1
-                await asyncio.sleep(1.5)
-
-        await asyncio.sleep(2)
-
-    log.info(f"Nuovi bandi oggi: {new_count} — Totale monitorati: {len(seen)}")
-
-    if state["last_health_check"] != today:
-        log.info("Cerco news nuova...")
-        news, seen_news = get_daily_news(seen_news)
-        await send_msg(bot, fmt_daily(new_count, len(seen), news))
-        state["last_health_check"] = today
-        save_seen_news(seen_news)
-    else:
-        log.info("Report giornaliero già inviato oggi — skip")
-
-    state["last_successful_scrape"] = today
-    save_seen(seen)
-    save_health(state)
-    log.info("═══ Fine run ═══")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        f"⚠️ *
