@@ -1,5 +1,5 @@
 {
-  "last_health_check": "2026-04-06",
+  "last_health_check": "2026-04-07",
   "source_alert_dates": {
     "InPA \u2014 radiologo": "2026-03-25",
     "InPA \u2014 radiologia": "2026-03-25",
@@ -12,8 +12,8 @@
     "ConcorsiPubblici.com \u2014 Radiologo": "2026-04-04",
     "Concorsi.it \u2014 Radiologia": "2026-04-03"
   },
-  "total_runs": 57,
-  "last_successful_scrape": "2026-04-06",
+  "total_runs": 58,
+  "last_successful_scrape": "2026-04-07",
   "active_bandi_count": 0,
   "last_alert_date": "",
   "consecutive_failures": 0
