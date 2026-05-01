@@ -1,5 +1,5 @@
 {
-  "last_health_check": "2026-04-30",
+  "last_health_check": "2026-05-01",
   "source_alert_dates": {
     "InPA \u2014 radiologo": "2026-03-25",
     "InPA \u2014 radiologia": "2026-03-25",
@@ -9,11 +9,11 @@
     "InPA \u2014 Portale Nazionale Concorsi": "2026-03-25",
     "Regione Abruzzo \u2014 Concorsi": "2026-03-25",
     "Regione Abruzzo \u2014 Concorsi Aperti": "2026-03-26",
-    "ConcorsiPubblici.com \u2014 Radiologo": "2026-04-30",
+    "ConcorsiPubblici.com \u2014 Radiologo": "2026-05-01",
     "Concorsi.it \u2014 Radiologia": "2026-04-03"
   },
-  "total_runs": 153,
-  "last_successful_scrape": "2026-04-30",
+  "total_runs": 154,
+  "last_successful_scrape": "2026-05-01",
   "active_bandi_count": 0,
   "last_alert_date": "",
   "consecutive_failures": 0
