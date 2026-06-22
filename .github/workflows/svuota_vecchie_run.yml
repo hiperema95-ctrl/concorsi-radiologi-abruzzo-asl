@@ -1,6 +1,11 @@
 name: Svuota vecchie Run
 on:
-  workflow_dispatch: # Questo ti permette di avviarlo manualmente con un tasto
+  workflow_dispatch:
+
+# Aggiungi esplicitamente i permessi di scrittura qui sotto:
+permissions:
+  actions: write
+  contents: read
 
 jobs:
   del_runs:
@@ -11,5 +16,5 @@ jobs:
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 0 # Cancella tutto
-          keep_minimum_runs: 0 # Non tiene nessuna run di salvataggio
+          retain_days: 0
+          keep_minimum_runs: 0
