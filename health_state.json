@@ -10,9 +10,10 @@
     "Regione Abruzzo \u2014 Concorsi": "2026-03-25",
     "Regione Abruzzo \u2014 Concorsi Aperti": "2026-03-26",
     "ConcorsiPubblici.com \u2014 Radiologo": "2026-06-22",
-    "Concorsi.it \u2014 Radiologia": "2026-06-01"
+    "Concorsi.it \u2014 Radiologia": "2026-06-01",
+    "ASL 1 Avezzano-Sulmona-L'Aquila": "2026-06-22"
   },
-  "total_runs": 362,
+  "total_runs": 363,
   "last_successful_scrape": "2026-06-22",
   "active_bandi_count": 0,
   "last_alert_date": "",
