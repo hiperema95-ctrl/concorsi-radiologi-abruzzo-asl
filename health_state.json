@@ -12,9 +12,10 @@
     "ConcorsiPubblici.com \u2014 Radiologo": "2026-07-10",
     "Concorsi.it \u2014 Radiologia": "2026-06-01",
     "ASL 1 Avezzano-Sulmona-L'Aquila": "2026-06-22",
-    "FNO TSRM \u2014 Rubrica Concorsi": "2026-07-07"
+    "FNO TSRM \u2014 Rubrica Concorsi": "2026-07-07",
+    "ASL 4 Teramo": "2026-07-10"
   },
-  "total_runs": 434,
+  "total_runs": 435,
   "last_successful_scrape": "2026-07-10",
   "active_bandi_count": 0,
   "last_alert_date": "",
