@@ -1,5 +1,5 @@
 """
-Bot Telegram - Concorsi Pubblici Medici Radiologi in Abruzzo
+Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 """
 
 import os
@@ -40,18 +40,29 @@ KEYWORDS = [
     "neuroradiologia", "radiologia interventistica",
 ]
 
-ABRUZZO_STRICT = [
-    "abruzzo",
+# Elenco aggiornato con province e ASL di Abruzzo, Marche ed Emilia Romagna
+GEO_STRICT = [
+    # Abruzzo
+    "abruzzo", "regione abruzzo",
     "asl 1 avezzano", "asl avezzano", "asl sulmona", "asl l'aquila", "asl aquila",
     "asl 2 lanciano", "asl lanciano", "asl vasto", "asl chieti",
     "asl 3 pescara", "asl pescara",
     "asl 4 teramo", "asl teramo",
-    "avezzano", "sulmona", "l'aquila", "lanciano", "vasto",
-    "pescara", "teramo", "chieti",
-    "regione abruzzo",
+    "avezzano", "sulmona", "l'aquila", "lanciano", "vasto", "pescara", "teramo", "chieti",
+    # Marche
+    "marche", "regione marche", "asur", "ast ancona", "ast pesaro", "ast urbino", 
+    "ast macerata", "ast fermo", "ast ascoli piceno", "ospedali riuniti", "torrette",
+    "ancona", "pesaro", "urbino", "macerata", "fermo", "ascoli piceno", "ascoli",
+    # Emilia Romagna
+    "emilia romagna", "emilia-romagna", "regione emilia romagna",
+    "ausl bologna", "ausl modena", "ausl reggio emilia", "ausl parma", "ausl piacenza",
+    "ausl ferrara", "ausl ravenna", "ausl forlì", "ausl cesena", "ausl romagna", "ausl rimini", "ausl imola",
+    "bologna", "modena", "reggio emilia", "parma", "piacenza", "ferrara", "ravenna", 
+    "forlì", "cesena", "rimini", "imola", "sant'orsola", "maggiore"
 ]
 
 SOURCES = [
+    # Sorgenti Locali Abruzzo
     {
         "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
         "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html",
@@ -76,6 +87,7 @@ SOURCES = [
         "type": "local",
         "ssl": True,
     },
+    # Sorgenti Nazionali (qui verranno applicati i filtri GEO_STRICT)
     {
         "name": "SIRM — Società Italiana Radiologia Medica",
         "url": "https://sirm.org/concorsi-2/",
@@ -89,8 +101,8 @@ SOURCES = [
         "ssl": True,
     },
     {
-        "name": "ConcorsiPubblici.com — Radiologo",
-        "url": "https://www.concorsipubblici.com/concorsi-radiologo.htm",
+        "name": "TiConsiglio — Concorsi Sanità",
+        "url": "https://www.ticonsiglio.com/concorsi-pubblici-sanita/",
         "type": "national",
         "ssl": True,
     },
@@ -288,9 +300,9 @@ def is_relevant(text: str) -> bool:
     return any(kw in text.lower() for kw in KEYWORDS)
 
 
-def is_abruzzo_strict(text: str) -> bool:
+def is_geo_strict(text: str) -> bool:
     t = text.lower()
-    return any(kw in t for kw in ABRUZZO_STRICT)
+    return any(kw in t for kw in GEO_STRICT)
 
 
 def scrape_source(source: dict) -> list[dict] | None:
@@ -308,8 +320,11 @@ def scrape_source(source: dict) -> list[dict] | None:
             continue
         parent = a.parent
         context = f"{title} {parent.get_text(separator=' ', strip=True) if parent else ''}"
-        if is_national and not is_abruzzo_strict(context):
+        
+        # Filtro geografico applicato solo per le fonti nazionali
+        if is_national and not is_geo_strict(context):
             continue
+            
         full_url = href if href.startswith("http") else urljoin(source["url"], href)
         results.append({
             "title":  title,
@@ -323,7 +338,7 @@ def scrape_source(source: dict) -> list[dict] | None:
 
 def fmt_bando(c: dict) -> str:
     return (
-        "🏥 *Nuovo concorso — Radiologo Abruzzo*\n\n"
+        "🏥 *Nuovo concorso — Radiologia*\n\n"
         f"📋 *{c['title']}*\n\n"
         f"🏛 {c['source']}\n"
         f"📅 {c['date']}\n\n"
@@ -380,7 +395,7 @@ async def main():
         log.error("TELEGRAM_TOKEN o CHAT_ID mancanti!")
         return
 
-    log.info("═══ Avvio bot concorsi radiologi Abruzzo ═══")
+    log.info("═══ Avvio bot concorsi radiologi (ABR, MAR, ER) ═══")
 
     seen      = load_seen()
     seen_news = load_seen_news()
