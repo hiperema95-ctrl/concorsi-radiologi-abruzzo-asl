@@ -1,5 +1,5 @@
 """
-Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
+Bot Telegram - Concorsi e Albi Pretori Radiologia (Abruzzo, Marche, Emilia Romagna)
 """
 
 import os
@@ -33,11 +33,13 @@ HEADERS = {
 }
 
 KEYWORDS = [
-    "radiologo", "radiologia", "radiodiagnostica",
-    "medico radiologo", "specialista radiologo",
-    "diagnostica per immagini", "radiologia diagnostica",
-    "tecnico sanitario di radiologia", "tsrm",
-    "neuroradiologia", "radiologia interventistica",
+    "radiolog",         
+    "radiodiagnostic",  
+    "tsrm", 
+    "tecnico di radiologia",
+    "tecnico sanitario di radiologia",
+    "neuroradiolog",    
+    "interventistica",
 ]
 
 GEO_STRICT = [
@@ -58,54 +60,40 @@ GEO_STRICT = [
 ]
 
 SOURCES = [
-    {
-        "name": "ASL 1 Avezzano-Sulmona-L'Aquila",
-        "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html",
-        "type": "local",
-        "ssl": True,
-    },
-    {
-        "name": "ASL 2 Lanciano-Vasto-Chieti",
-        "url": "https://lnx.asl2abruzzo.it/b/",
-        "type": "local",
-        "ssl": True,
-    },
-    {
-        "name": "ASL 3 Pescara",
-        "url": "https://www.asl.pe.it/BandiConcorsi.jsp",
-        "type": "local",
-        "ssl": True,
-    },
-    {
-        "name": "ASL 4 Teramo",
-        "url": "https://www.aslteramo.it/concorsi",
-        "type": "local",
-        "ssl": True,
-    },
-    {
-        "name": "SIRM — Società Italiana Radiologia Medica",
-        "url": "https://sirm.org/concorsi-2/",
-        "type": "national",
-        "ssl": True,
-    },
-    {
-        "name": "FNO TSRM — Rubrica Concorsi",
-        "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/",
-        "type": "national",
-        "ssl": True,
-    },
-    {
-        "name": "InfoConcorsi (EdiSES) — Ricerca Radiologia",
-        "url": "https://infoconcorsi.edises.it/ricerca?q=radiologia",
-        "type": "national",
-        "ssl": True,
-    },
-    {
-        "name": "Anaao Assomed — Concorsi Dirigenza Medica",
-        "url": "https://www.anaao.it/content.php?id=31",
-        "type": "national",
-        "ssl": True,
-    }
+    # --- SITI CONCORSI TRADIZIONALI (PA Locali) ---
+    {"name": "ASL 1 Avezzano (Concorsi)", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local", "ssl": True},
+    {"name": "ASL 2 Chieti (Concorsi)", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local", "ssl": True},
+    {"name": "ASL 3 Pescara (Concorsi)", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local", "ssl": True},
+    {"name": "ASL 4 Teramo (Concorsi)", "url": "https://www.aslteramo.it/concorsi", "type": "local", "ssl": True},
+    
+    # --- ALBI PRETORI - ABRUZZO ---
+    {"name": "ASL 1 Avezzano (Albo Pretorio)", "url": "https://trasparenza.asl1abruzzo.it/pagina638_albo-pretorio-storico.html", "type": "local", "ssl": True},
+    {"name": "ASL 2 Chieti (Albo Pretorio)", "url": "https://lnx.asl2abruzzo.it/albo/", "type": "local", "ssl": True},
+    {"name": "ASL 3 Pescara (Albo Pretorio)", "url": "https://www.asl.pe.it/Albo_Pretorio.jsp", "type": "local", "ssl": True},
+    {"name": "ASL 4 Teramo (Albo Pretorio)", "url": "https://alboaziendale.aslteramo.it/?ELEMENTI_PER_PAGINA=50", "type": "local", "ssl": True},
+
+    # --- ALBI PRETORI - MARCHE (AST) ---
+    {"name": "AST Ancona (Albo Pretorio)", "url": "https://www.astancona.marche.it/albo-pretorio/", "type": "local", "ssl": True},
+    {"name": "AST Pesaro Urbino (Albo Pretorio)", "url": "https://www.astpesaro.marche.it/albo-pretorio/", "type": "local", "ssl": True},
+    {"name": "AST Macerata (Albo Pretorio)", "url": "https://www.astmacerata.marche.it/albo-pretorio/", "type": "local", "ssl": True},
+    {"name": "AST Fermo (Albo Pretorio)", "url": "https://www.astfermo.marche.it/albo-pretorio/", "type": "local", "ssl": True},
+    {"name": "AST Ascoli Piceno (Albo Pretorio)", "url": "https://www.astascoli.marche.it/albo-pretorio/", "type": "local", "ssl": True},
+
+    # --- ALBI PRETORI - EMILIA ROMAGNA ---
+    {"name": "AUSL Romagna - Ravenna/Forlì/Cesena (Albo)", "url": "https://www.auslromagna.it/albo-pretorio", "type": "local", "ssl": True},
+    {"name": "AUSL Bologna (Albo Pretorio)", "url": "https://www.ausl.bologna.it/amministrazione-trasparente/albo-pretorio/", "type": "local", "ssl": True},
+    {"name": "AUSL Imola (Albo Pretorio)", "url": "https://www.ausl.imola.bo.it/albo-pretorio", "type": "local", "ssl": True},
+    {"name": "AUSL Modena (Albo Pretorio)", "url": "https://www.ausl.mo.it/albo-pretorio/", "type": "local", "ssl": True},
+    {"name": "AUSL Reggio Emilia (Albo Pretorio)", "url": "https://www.ausl.re.it/albo-pretorio", "type": "local", "ssl": True},
+    {"name": "AUSL Parma (Albo Pretorio)", "url": "https://www.ausl.pr.it/albo_pretorio/", "type": "local", "ssl": True},
+    {"name": "AUSL Piacenza (Albo Pretorio)", "url": "https://www.ausl.pc.it/it/albo-pretorio", "type": "local", "ssl": True},
+    {"name": "AUSL Ferrara (Albo Pretorio)", "url": "https://www.ausl.fe.it/albo-pretorio", "type": "local", "ssl": True},
+
+    # --- SORGENTI NAZIONALI ---
+    {"name": "SIRM — Società Italiana Radiologia Medica", "url": "https://sirm.org/concorsi-2/", "type": "national", "ssl": True},
+    {"name": "FNO TSRM — Rubrica Concorsi", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national", "ssl": True},
+    {"name": "InfoConcorsi (EdiSES) — Ricerca Radiologia", "url": "https://infoconcorsi.edises.it/ricerca?q=radiologia", "type": "national", "ssl": True},
+    {"name": "Anaao Assomed — Concorsi Dirigenza Medica", "url": "https://www.anaao.it/content.php?id=31", "type": "national", "ssl": True}
 ]
 
 NEWS_SOURCES = [
@@ -139,7 +127,13 @@ def save_seen_news(seen_news):
     with open(SEEN_NEWS_FILE, "w") as f: json.dump(items, f, indent=2)
 
 def load_health():
-    defaults = {"last_health_check": "", "source_alert_dates": {}, "total_runs": 0, "last_successful_scrape": ""}
+    defaults = {
+        "last_health_check": "", 
+        "source_alert_dates": {}, 
+        "js_alert_dates": {}, 
+        "total_runs": 0, 
+        "last_successful_scrape": ""
+    }
     if os.path.exists(HEALTH_FILE):
         with open(HEALTH_FILE) as f: defaults.update(json.load(f))
     return defaults
@@ -189,10 +183,27 @@ def is_geo_strict(text): return any(kw in text.lower() for kw in GEO_STRICT)
 
 def scrape_source(source):
     soup = fetch(source["url"], ssl_verify=source.get("ssl", True))
-    if not soup: return None
+    if not soup: return None, None
+    
+    warning = None
+    links = soup.find_all("a", href=True)
+    iframes = soup.find_all("iframe")
+    
+    # 1. Controllo Javascript: se ci sono pochissimi link HTML nativi
+    if len(links) < 10:
+        warning = "Possibile blocco JavaScript. Pagina senza link HTML nativi sufficienti."
+    
+    # 2. Controllo Iframe: se è presente un iframe sospetto
+    elif iframes:
+        for iframe in iframes:
+            src = iframe.get("src", "").lower()
+            if any(kw in src for kw in ["albo", "trasparenza", "maggioli", "kibernetes"]):
+                warning = f"L'Albo Pretorio è probabilmente nascosto in un iframe ({src[:40]}...)"
+                break
+
     is_national = source.get("type") == "national"
     results = []
-    for a in soup.find_all("a", href=True):
+    for a in links:
         title = a.get_text(separator=" ", strip=True)
         if len(title) < 10 or not is_relevant(title): continue
         context = f"{title} {a.parent.get_text(separator=' ', strip=True) if a.parent else ''}"
@@ -202,7 +213,7 @@ def scrape_source(source):
             "title": title, "url": full_url, "source": source["name"],
             "date": datetime.now().strftime("%d/%m/%Y"), "region": get_region(context)
         })
-    return results
+    return results, warning
 
 def fmt_bando(c):
     return (
@@ -212,6 +223,24 @@ def fmt_bando(c):
         f"🏛 {c['source']}\n"
         f"🗓 Rilevato il: {c['date']}\n\n"
         f"👉 [Apri il bando]({c['url']})"
+    )
+
+def fmt_js_alert(source_name: str, warning: str) -> str:
+    oggi = datetime.now().strftime("%d/%m/%Y")
+    return (
+        f"⚠️ *Allerta Struttura Pagina — {oggi}*\n\n"
+        f"🕵️‍♂️ *{source_name}*\n\n"
+        f"_{warning}_\n\n"
+        "Il bot ha rilevato che i contenuti di questo sito sono generati dinamicamente. I bandi potrebbero essere invisibili al sistema attuale."
+    )
+
+def fmt_source_alert(source_name: str) -> str:
+    oggi = datetime.now().strftime("%d/%m/%Y")
+    return (
+        f"⚠️ *Sorgente offline — {oggi}*\n\n"
+        f"❌ *{source_name}*\n\n"
+        "_Questo portale non è raggiungibile. "
+        "I suoi bandi potrebbero non essere monitorati fino al ripristino._"
     )
 
 def fmt_daily(new_today, total_active, news):
@@ -232,9 +261,34 @@ async def main():
     bot, today, new_count = Bot(token=TELEGRAM_TOKEN), today_str(), 0
     state["total_runs"] = state.get("total_runs", 0) + 1
     
+    if "js_alert_dates" not in state:
+        state["js_alert_dates"] = {}
+    if "source_alert_dates" not in state:
+        state["source_alert_dates"] = {}
+    
     for source in SOURCES:
-        concorsi = scrape_source(source)
-        if concorsi is None: continue
+        try:
+            concorsi, warning = scrape_source(source)
+        except Exception as e:
+            log.error(f"  Errore: {e}")
+            concorsi, warning = None, None
+
+        if concorsi is None:
+            last = state["source_alert_dates"].get(source["name"], "")
+            if last != today:
+                log.warning(f"Sorgente offline: {source['name']}")
+                await send_msg(bot, fmt_source_alert(source["name"]))
+                state["source_alert_dates"][source["name"]] = today
+            await asyncio.sleep(2)
+            continue
+            
+        if warning:
+            last_js = state["js_alert_dates"].get(source["name"], "")
+            if last_js != today:
+                log.warning(f"Allerta struttura per {source['name']}: {warning}")
+                await send_msg(bot, fmt_js_alert(source["name"], warning))
+                state["js_alert_dates"][source["name"]] = today
+
         for c in concorsi:
             if (cid := make_id(c["title"], c["url"])) not in seen:
                 await send_msg(bot, fmt_bando(c))
