@@ -2,6 +2,7 @@
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
 Motore: requests (KISS) + Lettore Feed RSS nativo per fonti nazionali
+Tempi di attesa rimossi (fatta eccezione per il rate-limit di Telegram).
 """
 
 import os
@@ -255,10 +256,6 @@ async def main():
                     new_today += 1
                     state["active_bandi_count"] += 1
                     await asyncio.sleep(1.5)
-        
-        # Pausa di sicurezza di 10 secondi per passare inosservati
-        log.info(f"Pausa di sicurezza per {source['name']}: 10 secondi...")
-        await asyncio.sleep(10)
 
     if state.get("last_health_check") != today:
         news, seen_news = get_daily_news(seen_news)
