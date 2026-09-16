@@ -36,13 +36,15 @@
     "ASL 3 Pescara (Concorsi)": "2026-09-16",
     "ASL 4 Teramo (Concorsi)": "2026-09-16",
     "ASL 2 Chieti (Albo Pretorio)": "2026-09-16",
-    "AST Ancona (Albo Pretorio)": "2026-09-16"
+    "AST Ancona (Albo Pretorio)": "2026-09-16",
+    "ASL 1 Avezzano": "2026-09-16",
+    "InfoConcorsi (EdiSES)": "2026-09-16"
   },
   "js_alert_dates": {
     "ASL 2 Chieti (Albo Pretorio)": "2026-09-16",
     "AST Ancona (Albo Pretorio)": "2026-09-16"
   },
-  "total_runs": 705,
+  "total_runs": 706,
   "last_successful_scrape": "2026-07-13",
   "active_bandi_count": 0,
   "last_alert_date": "",
