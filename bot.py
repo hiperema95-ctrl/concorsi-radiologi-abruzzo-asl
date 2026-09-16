@@ -1,8 +1,7 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
-Motore: requests (KISS) + Lettore Feed RSS nativo per fonti nazionali
-Tempi di attesa rimossi (fatta eccezione per il rate-limit di Telegram).
+MODALITÀ DEBUG ATTIVA: Invia sempre un report di diagnostica su Telegram a fine ciclo.
 """
 
 import os
@@ -22,7 +21,6 @@ from telegram.constants import ParseMode
 import warnings
 from bs4 import XMLParsedAsHTMLWarning
 
-# Ignora avvisi XML e SSL per mantenere i log puliti
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -60,25 +58,14 @@ REGION_KEYWORDS = [
 ]
 
 SOURCES = [
-    # --- SITI VETRINA ASL (HTML Standard) ---
-    {"name": "ASL 1 Avezzano", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local_html", "ssl": False, "region_filter": False},
+    {"name": "ASL 1 Avezzano", "url": "https://trasparenza.asl1abruzzo.it/page/75/concorsi-attivi", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "ASL 2 Chieti", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "ASL 3 Pescara", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "ASL 4 Teramo", "url": "https://www.aslteramo.it/concorsi", "type": "local_html", "ssl": False, "region_filter": False},
-    
-    # --- SORGENTI NAZIONALI & ASSOCIAZIONI ---
     {"name": "SIRM (Radiologia Medica)", "url": "https://sirm.org/concorsi-2/", "type": "national_html", "ssl": True, "region_filter": True},
     {"name": "FNO TSRM", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national_html", "ssl": True, "region_filter": True},
-    
-    # --- NUOVO: FEED RSS UFFICIALI ---
     {"name": "Gazzetta Ufficiale (Concorsi)", "url": "https://www.gazzettaufficiale.it/rss/S4", "type": "rss", "ssl": True, "region_filter": True}
 ]
-
-NEWS_SOURCES = [
-    {"name": "ESR", "url": "https://www.myesr.org/news", "selector": "article a, .news-item a, h2 a, h3 a", "base": "https://www.myesr.org"},
-    {"name": "RSNA News", "url": "https://www.rsna.org/news", "selector": "article a, .news-card a, h2 a, h3 a", "base": "https://www.rsna.org"},
-]
-NEWS_KEYWORDS = ["ai", "mri", "ct", "ultrasound", "radiology", "imaging", "cancer", "tumor", "detection"]
 
 MONTHS_IT = {
     "gennaio": 1, "febbraio": 2, "marzo": 3, "aprile": 4,
@@ -129,35 +116,18 @@ def save_json(file_path, data):
     with open(file_path, "w") as f: json.dump(data, f, indent=2)
 
 def make_id(title: str, url: str) -> str: return hashlib.md5(f"{title.strip().lower()}|{url.strip()}".encode()).hexdigest()
-def make_news_id(title: str) -> str: return hashlib.md5(title.strip().lower().encode()).hexdigest()
 def today_str() -> str: return date.today().isoformat()
 
 def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSoup | None:
     try:
         resp = requests.get(url, headers=HEADERS, params=params, timeout=25, verify=ssl_verify)
         resp.raise_for_status()
-        # Se l'URL contiene 'rss', forziamo il parsing XML
         if "rss" in url.lower():
             return BeautifulSoup(resp.content, "xml")
         return BeautifulSoup(resp.text, "lxml")
     except Exception as e:
         log.warning(f"Fetch fallito [{url}]: {e}")
         return None
-
-def get_daily_news(seen_news: set) -> tuple[dict | None, set]:
-    for ns in NEWS_SOURCES:
-        soup = fetch(ns["url"])
-        if not soup: continue
-        for a in soup.select(ns["selector"]):
-            title = a.get_text(separator=" ", strip=True)
-            href  = a.get("href", "")
-            if not title or len(title) < 20 or not any(kw in title.lower() for kw in NEWS_KEYWORDS): continue
-            full_url = href if href.startswith("http") else ns["base"] + href
-            news_id = make_news_id(title)
-            if news_id in seen_news: continue
-            seen_news.add(news_id)
-            return {"title": title, "url": full_url, "source": ns["name"]}, seen_news
-    return None, seen_news
 
 def is_relevant(text: str) -> bool: return any(kw in text.lower() for kw in KEYWORDS)
 def is_target_region(text: str) -> bool: return any(rk in text.lower() for rk in REGION_KEYWORDS)
@@ -169,71 +139,50 @@ def scrape_source(source: dict) -> list[dict] | None:
     region_filter = source.get("region_filter", False)
     results = []
     
-    # SEZIONE: LETTURA FEED RSS (Gazzetta Ufficiale, ecc.)
     if source.get("type") == "rss":
         for item in soup.find_all("item"):
             title = item.title.text.strip() if item.title else ""
             desc = item.description.text.strip() if item.description else ""
             link = item.link.text.strip() if item.link else ""
-            
-            # Combiniamo titolo e descrizione per avere più contesto
             context = f"{title} {desc}"
-            
             if not is_relevant(context): continue
             if region_filter and not is_target_region(context): continue
-            
             results.append({
-                "title": title,
-                "url": link,
-                "source": source["name"],
+                "title": title, "url": link, "source": source["name"],
                 "date": datetime.now().strftime("%d/%m/%Y"),
                 "region": get_region(context) if region_filter else "ABRUZZO"
             })
-            
-    # SEZIONE: LETTURA HTML STANDARD (Siti ASL)
     else:
         for a in soup.find_all("a", href=True):
             title = a.get_text(separator=" ", strip=True)
             href  = a["href"]
             if not title or len(title) < 10 or not is_relevant(title): continue
-            
             parent = a.parent
             context = f"{title} {parent.get_text(separator=' ', strip=True) if parent else ''}"
-            
             if region_filter and not is_target_region(context): continue
             if not is_recent(context): continue
-            
             full_url = href if href.startswith("http") else urljoin(source["url"], href)
             results.append({
-                "title": title,
-                "url": full_url,
-                "source": source["name"],
+                "title": title, "url": full_url, "source": source["name"],
                 "date": datetime.now().strftime("%d/%m/%Y"),
                 "region": get_region(context) if region_filter else "ABRUZZO"
             })
-            
     return results
 
 def fmt_bando(c: dict) -> str:
     return f"🏥 *Nuovo concorso — Radiologia*\n📍 *{c['region']}*\n\n📋 *{c['title']}*\n\n🏛 {c['source']}\n🗓 Rilevato il: {c['date']}\n\n👉 [Apri il bando]({c['url']})"
 
-def fmt_daily(new_today: int, total_active: int, news: dict | None) -> str:
-    oggi = datetime.now().strftime("%d/%m/%Y")
-    bandi_txt = f"📋 Nuovi concorsi oggi: *{new_today}*\n" if new_today > 0 else "📋 Nessun nuovo concorso oggi\n"
-    if total_active > 0: bandi_txt += f"📂 Concorsi attivi monitorati: *{total_active}*\n"
-    news_txt = f"\n📰 *News dal mondo della radiologia*\n\n*{news['title']}*\n_{news['source']}_\n\n👉 [Leggi l'articolo]({news['url']})" if news else "\n_Nessuna news disponibile oggi._"
-    return f"☀️ *{oggi} — Report giornaliero*\n\n{bandi_txt}{news_txt}"
-
 async def send_msg(bot: Bot, text: str):
     for cid in [cid.strip() for cid in CHAT_ID.split(",") if cid.strip()]:
         try: await bot.send_message(chat_id=cid, text=text, parse_mode=ParseMode.MARKDOWN)
-        except Exception: pass
+        except Exception as e: log.error(f"Errore Telegram: {e}")
 
 async def main():
-    if not TELEGRAM_TOKEN or not CHAT_ID: return
+    if not TELEGRAM_TOKEN or not CHAT_ID: 
+        log.error("Token o Chat ID mancanti!")
+        return
     
     seen = set(load_json(SEEN_FILE, []))
-    seen_news = set(load_json(SEEN_NEWS_FILE, []))
     state = load_json(HEALTH_FILE, {"last_health_check": "", "source_alert_dates": {}, "total_runs": 0, "active_bandi_count": 0})
     
     bot = Bot(token=TELEGRAM_TOKEN)
@@ -241,14 +190,20 @@ async def main():
     state["total_runs"] += 1
     new_today = 0
     
+    # Dizionario per accumulare i risultati del debug
+    debug_status = {}
+    
     for source in SOURCES:
         concorsi = scrape_source(source)
         if concorsi is None:
+            debug_status[source["name"]] = "❌ ERRORE/OFFLINE"
+            # Avviso normale limitato a una volta al giorno
             if state.get("source_alert_dates", {}).get(source["name"]) != today:
                 await send_msg(bot, f"⚠️ *Sorgente offline — {today}*\n❌ {source['name']}")
                 if "source_alert_dates" not in state: state["source_alert_dates"] = {}
                 state["source_alert_dates"][source["name"]] = today
         else:
+            debug_status[source["name"]] = f"✅ OK ({len(concorsi)} bandi validi)"
             for c in concorsi:
                 if (cid := make_id(c["title"], c["url"])) not in seen:
                     await send_msg(bot, fmt_bando(c))
@@ -257,11 +212,19 @@ async def main():
                     state["active_bandi_count"] += 1
                     await asyncio.sleep(1.5)
 
-    if state.get("last_health_check") != today:
-        news, seen_news = get_daily_news(seen_news)
-        await send_msg(bot, fmt_daily(new_today, state.get("active_bandi_count", len(seen)), news))
-        state["last_health_check"] = today
-        save_json(SEEN_NEWS_FILE, list(seen_news))
+    # ==========================================
+    # INVIO FORZATO DEL REPORT DI DEBUG
+    # ==========================================
+    debug_msg = f"🛠 *DEBUG ESECUZIONE BOT* ({today})\n\n"
+    debug_msg += f"Esecuzione numero: {state['total_runs']}\n"
+    debug_msg += f"Bandi totali in archivio: {len(seen)}\n"
+    debug_msg += f"Nuovi bandi elaborati ora: {new_today}\n\n"
+    debug_msg += "📡 *Stato Sorgenti:*\n"
+    for nome, esito in debug_status.items():
+        debug_msg += f"- {esito}: {nome}\n"
+    
+    await send_msg(bot, debug_msg)
+    # ==========================================
         
     save_json(SEEN_FILE, list(seen))
     save_json(HEALTH_FILE, state)
