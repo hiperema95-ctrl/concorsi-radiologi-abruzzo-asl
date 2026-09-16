@@ -1,9 +1,7 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
-Ripristino motore originale stabile (requests).
-Aggiunte regioni Emilia Romagna e Marche.
-Aggiunto delay tra le richieste per evitare blocchi WAF.
+Motore: requests (KISS) + Lettore Feed RSS nativo per fonti nazionali
 """
 
 import os
@@ -42,7 +40,7 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/122.0.0.0 Safari/537.36"
     )
 }
 
@@ -61,17 +59,18 @@ REGION_KEYWORDS = [
 ]
 
 SOURCES = [
-    # --- SITI VETRINA ABRUZZO (Nessun filtro regione richiesto) ---
-    {"name": "ASL 1 Avezzano", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local", "ssl": False, "region_filter": False},
-    {"name": "ASL 2 Chieti", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local", "ssl": False, "region_filter": False},
-    {"name": "ASL 3 Pescara", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local", "ssl": False, "region_filter": False},
-    {"name": "ASL 4 Teramo", "url": "https://www.aslteramo.it/concorsi", "type": "local", "ssl": False, "region_filter": False},
+    # --- SITI VETRINA ASL (HTML Standard) ---
+    {"name": "ASL 1 Avezzano", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local_html", "ssl": False, "region_filter": False},
+    {"name": "ASL 2 Chieti", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local_html", "ssl": False, "region_filter": False},
+    {"name": "ASL 3 Pescara", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local_html", "ssl": False, "region_filter": False},
+    {"name": "ASL 4 Teramo", "url": "https://www.aslteramo.it/concorsi", "type": "local_html", "ssl": False, "region_filter": False},
     
-    # --- SORGENTI NAZIONALI (Filtro regione attivo) ---
-    {"name": "SIRM", "url": "https://sirm.org/concorsi-2/", "type": "national", "ssl": True, "region_filter": True},
-    {"name": "FNO TSRM", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national", "ssl": True, "region_filter": True},
-    {"name": "InfoConcorsi (EdiSES)", "url": "https://infoconcorsi.edises.it/ricerca?q=radiologia", "type": "national", "ssl": True, "region_filter": True},
-    {"name": "Anaao Assomed", "url": "https://www.anaao.it/content.php?id=31", "type": "national", "ssl": True, "region_filter": True}
+    # --- SORGENTI NAZIONALI & ASSOCIAZIONI ---
+    {"name": "SIRM (Radiologia Medica)", "url": "https://sirm.org/concorsi-2/", "type": "national_html", "ssl": True, "region_filter": True},
+    {"name": "FNO TSRM", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national_html", "ssl": True, "region_filter": True},
+    
+    # --- NUOVO: FEED RSS UFFICIALI ---
+    {"name": "Gazzetta Ufficiale (Concorsi)", "url": "https://www.gazzettaufficiale.it/rss/S4", "type": "rss", "ssl": True, "region_filter": True}
 ]
 
 NEWS_SOURCES = [
@@ -136,6 +135,9 @@ def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSo
     try:
         resp = requests.get(url, headers=HEADERS, params=params, timeout=25, verify=ssl_verify)
         resp.raise_for_status()
+        # Se l'URL contiene 'rss', forziamo il parsing XML
+        if "rss" in url.lower():
+            return BeautifulSoup(resp.content, "xml")
         return BeautifulSoup(resp.text, "lxml")
     except Exception as e:
         log.warning(f"Fetch fallito [{url}]: {e}")
@@ -166,25 +168,49 @@ def scrape_source(source: dict) -> list[dict] | None:
     region_filter = source.get("region_filter", False)
     results = []
     
-    for a in soup.find_all("a", href=True):
-        title = a.get_text(separator=" ", strip=True)
-        href  = a["href"]
-        if not title or len(title) < 10 or not is_relevant(title): continue
-        
-        parent = a.parent
-        context = f"{title} {parent.get_text(separator=' ', strip=True) if parent else ''}"
-        
-        if region_filter and not is_target_region(context): continue
-        if not is_recent(context): continue
-        
-        full_url = href if href.startswith("http") else urljoin(source["url"], href)
-        results.append({
-            "title": title,
-            "url": full_url,
-            "source": source["name"],
-            "date": datetime.now().strftime("%d/%m/%Y"),
-            "region": get_region(context) if region_filter else "ABRUZZO"
-        })
+    # SEZIONE: LETTURA FEED RSS (Gazzetta Ufficiale, ecc.)
+    if source.get("type") == "rss":
+        for item in soup.find_all("item"):
+            title = item.title.text.strip() if item.title else ""
+            desc = item.description.text.strip() if item.description else ""
+            link = item.link.text.strip() if item.link else ""
+            
+            # Combiniamo titolo e descrizione per avere più contesto
+            context = f"{title} {desc}"
+            
+            if not is_relevant(context): continue
+            if region_filter and not is_target_region(context): continue
+            
+            results.append({
+                "title": title,
+                "url": link,
+                "source": source["name"],
+                "date": datetime.now().strftime("%d/%m/%Y"),
+                "region": get_region(context) if region_filter else "ABRUZZO"
+            })
+            
+    # SEZIONE: LETTURA HTML STANDARD (Siti ASL)
+    else:
+        for a in soup.find_all("a", href=True):
+            title = a.get_text(separator=" ", strip=True)
+            href  = a["href"]
+            if not title or len(title) < 10 or not is_relevant(title): continue
+            
+            parent = a.parent
+            context = f"{title} {parent.get_text(separator=' ', strip=True) if parent else ''}"
+            
+            if region_filter and not is_target_region(context): continue
+            if not is_recent(context): continue
+            
+            full_url = href if href.startswith("http") else urljoin(source["url"], href)
+            results.append({
+                "title": title,
+                "url": full_url,
+                "source": source["name"],
+                "date": datetime.now().strftime("%d/%m/%Y"),
+                "region": get_region(context) if region_filter else "ABRUZZO"
+            })
+            
     return results
 
 def fmt_bando(c: dict) -> str:
@@ -231,7 +257,7 @@ async def main():
                     await asyncio.sleep(1.5)
         
         # Pausa di sicurezza di 10 secondi per passare inosservati
-        log.info(f"Pausa di sicurezza: 10 secondi...")
+        log.info(f"Pausa di sicurezza per {source['name']}: 10 secondi...")
         await asyncio.sleep(10)
 
     if state.get("last_health_check") != today:
