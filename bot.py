@@ -7,7 +7,7 @@ import json
 import logging
 import hashlib
 import asyncio
-import cloudscraper
+import requests
 import urllib3
 from bs4 import BeautifulSoup
 from datetime import datetime, date
@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 from telegram import Bot
 from telegram.constants import ParseMode
 
-# Disabilita gli avvisi fastidiosi per i siti PA senza certificato HTTPS valido
+# Disabilita gli avvisi SSL fastidiosi per i siti della Pubblica Amministrazione
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
@@ -32,9 +32,8 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
 }
 
 KEYWORDS = [
@@ -65,7 +64,7 @@ GEO_STRICT = [
 ]
 
 SOURCES = [
-    # --- SITI CONCORSI TRADIZIONALI (PA Locali) ---
+    # --- SITI CONCORSI TRADIZIONALI ---
     {"name": "ASL 1 Avezzano (Concorsi)", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local", "ssl": False},
     {"name": "ASL 2 Chieti (Concorsi)", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local", "ssl": False},
     {"name": "ASL 3 Pescara (Concorsi)", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local", "ssl": False},
@@ -77,7 +76,7 @@ SOURCES = [
     {"name": "ASL 3 Pescara (Albo Pretorio)", "url": "https://www.asl.pe.it/Albo_Pretorio.jsp", "type": "local", "ssl": False},
     {"name": "ASL 4 Teramo (Albo Pretorio)", "url": "https://alboaziendale.aslteramo.it/?ELEMENTI_PER_PAGINA=50", "type": "local", "ssl": False},
 
-    # --- ALBI PRETORI - MARCHE (AST) ---
+    # --- ALBI PRETORI - MARCHE ---
     {"name": "AST Ancona (Albo Pretorio)", "url": "https://www.astancona.marche.it/albo-pretorio/", "type": "local", "ssl": False},
     {"name": "AST Pesaro Urbino (Albo Pretorio)", "url": "https://www.astpesaro.marche.it/albo-pretorio/", "type": "local", "ssl": False},
     {"name": "AST Macerata (Albo Pretorio)", "url": "https://www.astmacerata.marche.it/albo-pretorio/", "type": "local", "ssl": False},
@@ -85,7 +84,7 @@ SOURCES = [
     {"name": "AST Ascoli Piceno (Albo Pretorio)", "url": "https://www.astascoli.marche.it/albo-pretorio/", "type": "local", "ssl": False},
 
     # --- ALBI PRETORI - EMILIA ROMAGNA ---
-    {"name": "AUSL Romagna - Ravenna/Forlì/Cesena (Albo)", "url": "https://www.auslromagna.it/albo-pretorio", "type": "local", "ssl": False},
+    {"name": "AUSL Romagna - Ravenna/Forlì/Cesena", "url": "https://www.auslromagna.it/albo-pretorio", "type": "local", "ssl": False},
     {"name": "AUSL Bologna (Albo Pretorio)", "url": "https://www.ausl.bologna.it/amministrazione-trasparente/albo-pretorio/", "type": "local", "ssl": False},
     {"name": "AUSL Imola (Albo Pretorio)", "url": "https://www.ausl.imola.bo.it/albo-pretorio", "type": "local", "ssl": False},
     {"name": "AUSL Modena (Albo Pretorio)", "url": "https://www.ausl.mo.it/albo-pretorio/", "type": "local", "ssl": False},
@@ -95,24 +94,18 @@ SOURCES = [
     {"name": "AUSL Ferrara (Albo Pretorio)", "url": "https://www.ausl.fe.it/albo-pretorio", "type": "local", "ssl": False},
 
     # --- SORGENTI NAZIONALI ---
-    {"name": "SIRM — Società Italiana Radiologia Medica", "url": "https://sirm.org/concorsi-2/", "type": "national", "ssl": True},
-    {"name": "FNO TSRM — Rubrica Concorsi", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national", "ssl": True},
-    {"name": "InfoConcorsi (EdiSES) — Ricerca Radiologia", "url": "https://infoconcorsi.edises.it/ricerca?q=radiologia", "type": "national", "ssl": True},
-    {"name": "Anaao Assomed — Concorsi Dirigenza Medica", "url": "https://www.anaao.it/content.php?id=31", "type": "national", "ssl": True}
+    {"name": "SIRM — Radiologia Medica", "url": "https://sirm.org/concorsi-2/", "type": "national", "ssl": True},
+    {"name": "FNO TSRM — Concorsi", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national", "ssl": True},
+    {"name": "InfoConcorsi (EdiSES)", "url": "https://infoconcorsi.edises.it/ricerca?q=radiologia", "type": "national", "ssl": True},
+    {"name": "Anaao Assomed", "url": "https://www.anaao.it/content.php?id=31", "type": "national", "ssl": True}
 ]
 
 NEWS_SOURCES = [
     {"name": "ESR", "url": "https://www.myesr.org/news", "selector": "article a, .news-item a, h2 a, h3 a", "base": "https://www.myesr.org"},
     {"name": "RSNA News", "url": "https://www.rsna.org/news", "selector": "article a, .news-card a, h2 a, h3 a", "base": "https://www.rsna.org"},
-    {"name": "AuntMinnie", "url": "https://www.auntminnie.com/index.aspx?sec=nws", "selector": "a.article-title, h2 a, h3 a, .headline a", "base": "https://www.auntminnie.com"},
-    {"name": "Radiology Today", "url": "https://www.radiologytoday.net", "selector": ".entry-title a, h2 a, h3 a, article a", "base": "https://www.radiologytoday.net"},
-    {"name": "Imaging Technology News", "url": "https://www.itnonline.com/channel/radiology", "selector": "h2 a, h3 a, .article-title a", "base": "https://www.itnonline.com"},
-    {"name": "Radiology Business", "url": "https://www.radiologybusiness.com/topics/imaging", "selector": "h2 a, h3 a, .article-title a, .entry-title a", "base": "https://www.radiologybusiness.com"},
-    {"name": "Applied Radiology", "url": "https://appliedradiology.com/articles", "selector": "h2 a, h3 a, .article-title a", "base": "https://appliedradiology.com"},
-    {"name": "Diagnostic Imaging", "url": "https://www.diagnosticimaging.com/view/news", "selector": "h2 a, h3 a, .article-title a", "base": "https://www.diagnosticimaging.com"},
 ]
 
-NEWS_KEYWORDS = ["ai", "artificial intelligence", "mri", "ct", "ultrasound", "x-ray", "radiology", "imaging", "cancer", "detection", "study", "research"]
+NEWS_KEYWORDS = ["ai", "mri", "ct", "ultrasound", "radiology", "imaging", "cancer"]
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
@@ -132,13 +125,7 @@ def save_seen_news(seen_news):
     with open(SEEN_NEWS_FILE, "w") as f: json.dump(items, f, indent=2)
 
 def load_health():
-    defaults = {
-        "last_health_check": "", 
-        "source_alert_dates": {}, 
-        "js_alert_dates": {}, 
-        "total_runs": 0, 
-        "last_successful_scrape": ""
-    }
+    defaults = {"last_health_check": "", "source_alert_dates": {}, "total_runs": 0, "last_successful_scrape": ""}
     if os.path.exists(HEALTH_FILE):
         with open(HEALTH_FILE) as f: defaults.update(json.load(f))
     return defaults
@@ -152,9 +139,7 @@ def today_str(): return date.today().isoformat()
 
 def fetch(url, params=None, ssl_verify=True):
     try:
-        # Usa cloudscraper invece di requests per eludere WAF e Cloudflare
-        scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
-        resp = scraper.get(url, headers=HEADERS, params=params, timeout=30, verify=ssl_verify)
+        resp = requests.get(url, headers=HEADERS, params=params, timeout=25, verify=ssl_verify)
         resp.raise_for_status()
         return BeautifulSoup(resp.text, "lxml")
     except Exception as e:
@@ -190,27 +175,10 @@ def is_geo_strict(text): return any(kw in text.lower() for kw in GEO_STRICT)
 
 def scrape_source(source):
     soup = fetch(source["url"], ssl_verify=source.get("ssl", True))
-    if not soup: return None, None
-    
-    warning = None
-    links = soup.find_all("a", href=True)
-    iframes = soup.find_all("iframe")
-    
-    # 1. Controllo Javascript: se ci sono pochissimi link HTML nativi
-    if len(links) < 10:
-        warning = "Possibile blocco JavaScript. Pagina senza link HTML nativi sufficienti."
-    
-    # 2. Controllo Iframe: se è presente un iframe sospetto
-    elif iframes:
-        for iframe in iframes:
-            src = iframe.get("src", "").lower()
-            if any(kw in src for kw in ["albo", "trasparenza", "maggioli", "kibernetes"]):
-                warning = f"L'Albo Pretorio è probabilmente nascosto in un iframe ({src[:40]}...)"
-                break
-
+    if not soup: return None
     is_national = source.get("type") == "national"
     results = []
-    for a in links:
+    for a in soup.find_all("a", href=True):
         title = a.get_text(separator=" ", strip=True)
         if len(title) < 10 or not is_relevant(title): continue
         context = f"{title} {a.parent.get_text(separator=' ', strip=True) if a.parent else ''}"
@@ -220,7 +188,7 @@ def scrape_source(source):
             "title": title, "url": full_url, "source": source["name"],
             "date": datetime.now().strftime("%d/%m/%Y"), "region": get_region(context)
         })
-    return results, warning
+    return results
 
 def fmt_bando(c):
     return (
@@ -230,15 +198,6 @@ def fmt_bando(c):
         f"🏛 {c['source']}\n"
         f"🗓 Rilevato il: {c['date']}\n\n"
         f"👉 [Apri il bando]({c['url']})"
-    )
-
-def fmt_js_alert(source_name: str, warning: str) -> str:
-    oggi = datetime.now().strftime("%d/%m/%Y")
-    return (
-        f"⚠️ *Allerta Struttura Pagina — {oggi}*\n\n"
-        f"🕵️‍♂️ *{source_name}*\n\n"
-        f"_{warning}_\n\n"
-        "Il bot ha rilevato che i contenuti di questo sito sono generati dinamicamente. I bandi potrebbero essere invisibili al sistema attuale."
     )
 
 def fmt_source_alert(source_name: str) -> str:
@@ -268,17 +227,15 @@ async def main():
     bot, today, new_count = Bot(token=TELEGRAM_TOKEN), today_str(), 0
     state["total_runs"] = state.get("total_runs", 0) + 1
     
-    if "js_alert_dates" not in state:
-        state["js_alert_dates"] = {}
     if "source_alert_dates" not in state:
         state["source_alert_dates"] = {}
     
     for source in SOURCES:
         try:
-            concorsi, warning = scrape_source(source)
+            concorsi = scrape_source(source)
         except Exception as e:
             log.error(f"  Errore: {e}")
-            concorsi, warning = None, None
+            concorsi = None
 
         if concorsi is None:
             last = state["source_alert_dates"].get(source["name"], "")
@@ -286,22 +243,18 @@ async def main():
                 log.warning(f"Sorgente offline: {source['name']}")
                 await send_msg(bot, fmt_source_alert(source["name"]))
                 state["source_alert_dates"][source["name"]] = today
-            await asyncio.sleep(2)
-            continue
-            
-        if warning:
-            last_js = state["js_alert_dates"].get(source["name"], "")
-            if last_js != today:
-                log.warning(f"Allerta struttura per {source['name']}: {warning}")
-                await send_msg(bot, fmt_js_alert(source["name"], warning))
-                state["js_alert_dates"][source["name"]] = today
-
-        for c in concorsi:
-            if (cid := make_id(c["title"], c["url"])) not in seen:
-                await send_msg(bot, fmt_bando(c))
-                seen.add(cid)
-                new_count += 1
-                await asyncio.sleep(1.5)
+        else:
+            for c in concorsi:
+                if (cid := make_id(c["title"], c["url"])) not in seen:
+                    await send_msg(bot, fmt_bando(c))
+                    seen.add(cid)
+                    new_count += 1
+                    # Piccola pausa tra un messaggio Telegram e l'altro
+                    await asyncio.sleep(2)
+        
+        # PAUSA STRATEGICA DI 15 SECONDI TRA UN SITO E L'ALTRO
+        log.info(f"Pausa di 15 secondi per non sovraccaricare le richieste...")
+        await asyncio.sleep(15)
 
     if state.get("last_health_check") != today:
         news, seen_news = get_daily_news(seen_news)
