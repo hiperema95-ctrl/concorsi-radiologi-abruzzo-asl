@@ -1,5 +1,5 @@
 {
-  "last_health_check": "2026-09-23",
+  "last_health_check": "2026-09-24",
   "source_alert_dates": {
     "InPA — radiologo": "2026-03-25",
     "InPA — radiologia": "2026-03-25",
@@ -37,14 +37,14 @@
     "ASL 4 Teramo (Concorsi)": "2026-09-16",
     "ASL 2 Chieti (Albo Pretorio)": "2026-09-16",
     "AST Ancona (Albo Pretorio)": "2026-09-16",
-    "ASL 1 Avezzano": "2026-09-23",
+    "ASL 1 Avezzano": "2026-09-24",
     "InfoConcorsi (EdiSES)": "2026-09-16"
   },
   "js_alert_dates": {
     "ASL 2 Chieti (Albo Pretorio)": "2026-09-16",
     "AST Ancona (Albo Pretorio)": "2026-09-16"
   },
-  "total_runs": 741,
+  "total_runs": 742,
   "last_successful_scrape": "2026-07-13",
   "active_bandi_count": 0,
   "last_alert_date": "",
