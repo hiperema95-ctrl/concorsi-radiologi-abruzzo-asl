@@ -1,7 +1,7 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
-Filtro TSRM Escluso. Aggiunte sezioni Mobilità ASL.
+Fix critico: Rimossa parola generica "dirigente medico". Ricerca ESCLUSIVA per specialità radiologiche.
 """
 
 import os
@@ -46,13 +46,16 @@ HEADERS = {
     )
 }
 
-# Solo Dirigenti Medici
+# SOLO RADICI RADIOLOGICHE. Qualsiasi bando deve contenere il nome del reparto/specialità.
 KEYWORDS = [
-    "radiolog", "radiodiagnostic", "neuroradiolog", 
-    "interventistica", "dirigente medico"
+    "radiolog", 
+    "radiodiagnostic", 
+    "diagnostica per immagini",
+    "neuroradiolog", 
+    "interventistica"
 ]
 
-# Esclusioni tassative per ripulire dai tecnici
+# Filtro per segare fuori i TSRM
 EXCLUDE_KEYWORDS = [
     "tsrm", "tecnico", "tecnici", "comparto", "infermiere", "ostetrica"
 ]
