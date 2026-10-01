@@ -1,7 +1,7 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
-Motore: requests (KISS) + Lettore Feed RSS nativo.
+Motore: requests (KISS) + Lettore Feed RSS nativo + inPA API.
 Features: Generazione automatica Archivio Markdown leggibile su GitHub.
 """
 
@@ -70,7 +70,8 @@ SOURCES = [
     {"name": "ASL 4 Teramo", "url": "https://www.aslteramo.it/concorsi", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "SIRM (Radiologia Medica)", "url": "https://sirm.org/concorsi-2/", "type": "national_html", "ssl": True, "region_filter": True},
     {"name": "FNO TSRM", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national_html", "ssl": True, "region_filter": True},
-    {"name": "Gazzetta Ufficiale (Concorsi)", "url": "https://www.gazzettaufficiale.it/rss/S4", "type": "rss", "ssl": True, "region_filter": True}
+    {"name": "Gazzetta Ufficiale (Concorsi)", "url": "https://www.gazzettaufficiale.it/rss/S4", "type": "rss", "ssl": True, "region_filter": True},
+    {"name": "inPA - Portale Nazionale", "url": "https://www.inpa.gov.it/bandi-e-avvisi/?text=radiologia", "type": "inpa", "ssl": True, "region_filter": True}
 ]
 
 MONTHS_IT = {
@@ -155,34 +156,65 @@ def scrape_source(source: dict) -> list[dict] | None:
     region_filter = source.get("region_filter", False)
     results = []
     
+    # 1. LETTURA FEED RSS (Gazzetta Ufficiale)
     if source.get("type") == "rss":
         for item in soup.find_all("item"):
             title = item.title.text.strip() if item.title else ""
             desc = item.description.text.strip() if item.description else ""
             link = item.link.text.strip() if item.link else ""
+            
             context = f"{title} {desc}"
             if not is_relevant(context): continue
             if region_filter and not is_target_region(context): continue
+            
             results.append({
                 "title": title, "url": link, "source": source["name"],
                 "date": datetime.now().strftime("%d/%m/%Y"),
                 "region": get_region(context) if region_filter else "ABRUZZO"
             })
+            
+    # 2. LETTURA INPA (Nazionale)
+    elif source.get("type") == "inpa":
+        for card in soup.find_all("div", class_=re.compile(r"card.*bando")):
+            title_tag = card.find(["h3", "h4", "a"])
+            link_tag = card.find("a", href=True)
+            
+            if not title_tag or not link_tag: continue
+            
+            title = title_tag.get_text(separator=" ", strip=True)
+            href = link_tag["href"]
+            context = card.get_text(separator=" ", strip=True)
+            
+            if not title or len(title) < 10 or not is_relevant(title): continue
+            if region_filter and not is_target_region(context): continue
+            
+            full_url = href if href.startswith("http") else urljoin("https://www.inpa.gov.it", href)
+            results.append({
+                "title": title, "url": full_url, "source": source["name"],
+                "date": datetime.now().strftime("%d/%m/%Y"),
+                "region": get_region(context) if region_filter else "ABRUZZO"
+            })
+
+    # 3. LETTURA HTML STANDARD (Siti ASL)
     else:
         for a in soup.find_all("a", href=True):
             title = a.get_text(separator=" ", strip=True)
             href  = a["href"]
             if not title or len(title) < 10 or not is_relevant(title): continue
+            
             parent = a.parent
             context = f"{title} {parent.get_text(separator=' ', strip=True) if parent else ''}"
+            
             if region_filter and not is_target_region(context): continue
             if not is_recent(context): continue
+            
             full_url = href if href.startswith("http") else urljoin(source["url"], href)
             results.append({
                 "title": title, "url": full_url, "source": source["name"],
                 "date": datetime.now().strftime("%d/%m/%Y"),
                 "region": get_region(context) if region_filter else "ABRUZZO"
             })
+            
     return results
 
 def crea_archivio_md(seen_dict):
@@ -192,7 +224,6 @@ def crea_archivio_md(seen_dict):
     md += "In questa pagina trovi tutti i bandi rilevati dal bot.\n"
     md += "Clicca sul titolo in blu per aprire la pagina ufficiale del concorso.\n\n---\n\n"
     
-    # Invertiamo per avere (tendenzialmente) i più recenti in alto
     for cid, bando in reversed(list(seen_dict.items())):
         titolo = bando.get("title", "Titolo Sconosciuto")
         url = bando.get("url", "#")
