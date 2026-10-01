@@ -1,8 +1,7 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
-Motore: requests (KISS) + Lettore Feed RSS nativo.
-Aggregatori: Ripristinati Concorsi.it e ConcorsiPubblici.com con filtro regionale locale.
+Filtro TSRM Escluso. Aggiunte sezioni Mobilità ASL.
 """
 
 import os
@@ -22,7 +21,6 @@ from telegram.constants import ParseMode
 import warnings
 from bs4 import XMLParsedAsHTMLWarning
 
-# Ignora avvisi XML e SSL per mantenere i log puliti
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -48,10 +46,15 @@ HEADERS = {
     )
 }
 
+# Solo Dirigenti Medici
 KEYWORDS = [
-    "radiolog", "radiodiagnostic", "tsrm",
-    "tecnico sanitario di radiologia", "tecnico di radiologia",
-    "diagnostica per immagini", "neuroradiolog", "interventistica"
+    "radiolog", "radiodiagnostic", "neuroradiolog", 
+    "interventistica", "dirigente medico"
+]
+
+# Esclusioni tassative per ripulire dai tecnici
+EXCLUDE_KEYWORDS = [
+    "tsrm", "tecnico", "tecnici", "comparto", "infermiere", "ostetrica"
 ]
 
 REGION_KEYWORDS = [
@@ -63,19 +66,23 @@ REGION_KEYWORDS = [
 ]
 
 SOURCES = [
-    # --- SITI VETRINA ASL ---
-    {"name": "ASL 1 Avezzano", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local_html", "ssl": False, "region_filter": False},
+    # --- ASL 1 Avezzano ---
+    {"name": "ASL 1 Avezzano (Concorsi)", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local_html", "ssl": False, "region_filter": False},
+    {"name": "ASL 1 Avezzano (Mobilità/Avvisi)", "url": "https://trasparenza.asl1abruzzo.it/pagina641_avvisi-pubblici.html", "type": "local_html", "ssl": False, "region_filter": False},
+    
+    # --- ASL 2 Chieti ---
     {"name": "ASL 2 Chieti", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local_html", "ssl": False, "region_filter": False},
-    {"name": "ASL 3 Pescara", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local_html", "ssl": False, "region_filter": False},
+    
+    # --- ASL 3 Pescara ---
+    {"name": "ASL 3 Pescara (Concorsi)", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local_html", "ssl": False, "region_filter": False},
+    {"name": "ASL 3 Pescara (Mobilità)", "url": "https://www.asl.pe.it/BandiMobilita.jsp", "type": "local_html", "ssl": False, "region_filter": False},
+    
+    # --- ASL 4 Teramo ---
     {"name": "ASL 4 Teramo", "url": "https://www.aslteramo.it/concorsi", "type": "local_html", "ssl": False, "region_filter": False},
     
-    # --- ASSOCIAZIONI E GAZZETTA UFFICIALE ---
+    # --- NAZIONALI ---
     {"name": "SIRM (Radiologia Medica)", "url": "https://sirm.org/concorsi-2/", "type": "national_html", "ssl": True, "region_filter": True},
-    {"name": "FNO TSRM", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national_html", "ssl": True, "region_filter": True},
     {"name": "Gazzetta Ufficiale (Concorsi)", "url": "https://www.gazzettaufficiale.it/rss/S4", "type": "rss", "ssl": True, "region_filter": True},
-    
-    # --- AGGREGATORI NAZIONALI (PONTE PER INPA E BUR) ---
-    {"name": "ConcorsiPubblici.com (inPA/BUR)", "url": "https://www.concorsipubblici.com/concorsi-radiologo.htm", "type": "national_html", "ssl": True, "region_filter": True},
     {"name": "Concorsi.it (inPA/BUR)", "url": "https://www.concorsi.it/risultati?ric=radiologia", "type": "national_html", "ssl": True, "region_filter": True}
 ]
 
@@ -150,7 +157,12 @@ def fetch(url: str, params: dict = None, ssl_verify: bool = True) -> BeautifulSo
         log.warning(f"Fetch fallito [{url}]: {e}")
         return None
 
-def is_relevant(text: str) -> bool: return any(kw in text.lower() for kw in KEYWORDS)
+def is_relevant(text: str) -> bool: 
+    t = text.lower()
+    has_kw = any(kw in t for kw in KEYWORDS)
+    has_ex = any(ex in t for ex in EXCLUDE_KEYWORDS)
+    return has_kw and not has_ex
+
 def is_target_region(text: str) -> bool: return any(rk in text.lower() for rk in REGION_KEYWORDS)
 
 def scrape_source(source: dict) -> list[dict] | None:
@@ -220,7 +232,7 @@ def crea_archivio_md(seen_dict):
 
 def fmt_bando(c: dict) -> str:
     return (
-        f"🏥 *Nuovo concorso — Radiologia*\n"
+        f"🏥 *Nuovo bando — Dirigenza Medica*\n"
         f"📍 *{c['region']}*\n\n"
         f"📋 *{c['title']}*\n\n"
         f"🏛 {c['source']}\n"
@@ -232,7 +244,7 @@ def fmt_bando(c: dict) -> str:
 def fmt_daily(new_today: int, total_active: int) -> str:
     oggi = datetime.now().strftime("%d/%m/%Y")
     bandi_txt = f"📋 Nuovi concorsi oggi: *{new_today}*\n" if new_today > 0 else "📋 Nessun nuovo concorso oggi\n"
-    if total_active > 0: bandi_txt += f"📂 Concorsi attivi in memoria: *{total_active}*\n"
+    if total_active > 0: bandi_txt += f"📂 Bandi attivi in memoria: *{total_active}*\n"
     return (
         f"☀️ *{oggi} — Report giornaliero*\n\n"
         f"{bandi_txt}\n"
