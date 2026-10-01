@@ -1,8 +1,8 @@
 """
 Bot Telegram - Concorsi Pubblici Medici Radiologi (Abruzzo, Marche, Emilia Romagna)
 ============================================================
-Motore: requests (KISS) + Lettore Feed RSS nativo + inPA API.
-Features: Generazione automatica Archivio Markdown leggibile su GitHub.
+Motore: requests (KISS) + Lettore Feed RSS nativo.
+Aggregatori: Ripristinati Concorsi.it e ConcorsiPubblici.com con filtro regionale locale.
 """
 
 import os
@@ -35,7 +35,6 @@ HEALTH_FILE    = "health_state.json"
 SEEN_NEWS_FILE = "seen_news.json"
 ARCHIVIO_MD    = "archivio_concorsi.md"
 
-# Sostituisci questo link se il repository si chiama in modo diverso
 URL_ARCHIVIO_GITHUB = "https://github.com/hiperema95-ctrl/concorsi-radiologi-abruzzo-asl/blob/main/archivio_concorsi.md"
 
 logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=logging.INFO)
@@ -64,14 +63,20 @@ REGION_KEYWORDS = [
 ]
 
 SOURCES = [
+    # --- SITI VETRINA ASL ---
     {"name": "ASL 1 Avezzano", "url": "https://trasparenza.asl1abruzzo.it/pagina640_concorsi-attivi.html", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "ASL 2 Chieti", "url": "https://lnx.asl2abruzzo.it/b/", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "ASL 3 Pescara", "url": "https://www.asl.pe.it/BandiConcorsi.jsp", "type": "local_html", "ssl": False, "region_filter": False},
     {"name": "ASL 4 Teramo", "url": "https://www.aslteramo.it/concorsi", "type": "local_html", "ssl": False, "region_filter": False},
+    
+    # --- ASSOCIAZIONI E GAZZETTA UFFICIALE ---
     {"name": "SIRM (Radiologia Medica)", "url": "https://sirm.org/concorsi-2/", "type": "national_html", "ssl": True, "region_filter": True},
     {"name": "FNO TSRM", "url": "https://www.tsrm-pstrp.org/index.php/rubrica_concorsi/", "type": "national_html", "ssl": True, "region_filter": True},
     {"name": "Gazzetta Ufficiale (Concorsi)", "url": "https://www.gazzettaufficiale.it/rss/S4", "type": "rss", "ssl": True, "region_filter": True},
-    {"name": "inPA - Portale Nazionale", "url": "https://www.inpa.gov.it/bandi-e-avvisi/?text=radiologia", "type": "inpa", "ssl": True, "region_filter": True}
+    
+    # --- AGGREGATORI NAZIONALI (PONTE PER INPA E BUR) ---
+    {"name": "ConcorsiPubblici.com (inPA/BUR)", "url": "https://www.concorsipubblici.com/concorsi-radiologo.htm", "type": "national_html", "ssl": True, "region_filter": True},
+    {"name": "Concorsi.it (inPA/BUR)", "url": "https://www.concorsi.it/risultati?ric=radiologia", "type": "national_html", "ssl": True, "region_filter": True}
 ]
 
 MONTHS_IT = {
@@ -115,7 +120,6 @@ def get_region(text: str) -> str:
     return "REGIONE DA VERIFICARE"
 
 def load_seen():
-    """Carica il DB. Se è il vecchio formato a lista, lo converte in dizionario."""
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE) as f:
             data = json.load(f)
@@ -156,7 +160,6 @@ def scrape_source(source: dict) -> list[dict] | None:
     region_filter = source.get("region_filter", False)
     results = []
     
-    # 1. LETTURA FEED RSS (Gazzetta Ufficiale)
     if source.get("type") == "rss":
         for item in soup.find_all("item"):
             title = item.title.text.strip() if item.title else ""
@@ -172,30 +175,6 @@ def scrape_source(source: dict) -> list[dict] | None:
                 "date": datetime.now().strftime("%d/%m/%Y"),
                 "region": get_region(context) if region_filter else "ABRUZZO"
             })
-            
-    # 2. LETTURA INPA (Nazionale)
-    elif source.get("type") == "inpa":
-        for card in soup.find_all("div", class_=re.compile(r"card.*bando")):
-            title_tag = card.find(["h3", "h4", "a"])
-            link_tag = card.find("a", href=True)
-            
-            if not title_tag or not link_tag: continue
-            
-            title = title_tag.get_text(separator=" ", strip=True)
-            href = link_tag["href"]
-            context = card.get_text(separator=" ", strip=True)
-            
-            if not title or len(title) < 10 or not is_relevant(title): continue
-            if region_filter and not is_target_region(context): continue
-            
-            full_url = href if href.startswith("http") else urljoin("https://www.inpa.gov.it", href)
-            results.append({
-                "title": title, "url": full_url, "source": source["name"],
-                "date": datetime.now().strftime("%d/%m/%Y"),
-                "region": get_region(context) if region_filter else "ABRUZZO"
-            })
-
-    # 3. LETTURA HTML STANDARD (Siti ASL)
     else:
         for a in soup.find_all("a", href=True):
             title = a.get_text(separator=" ", strip=True)
@@ -218,7 +197,6 @@ def scrape_source(source: dict) -> list[dict] | None:
     return results
 
 def crea_archivio_md(seen_dict):
-    """Genera un file Markdown formattato in base al dizionario dei bandi."""
     md = "# 📂 Archivio Concorsi Radiologia\n\n"
     md += f"_Ultimo aggiornamento: {datetime.now().strftime('%d/%m/%Y %H:%M')}_\n\n"
     md += "In questa pagina trovi tutti i bandi rilevati dal bot.\n"
@@ -290,14 +268,12 @@ async def main():
             for c in concorsi:
                 cid = make_id(c["title"], c["url"])
                 if cid not in seen:
-                    # Salviamo i dettagli completi invece del solo hash
                     seen[cid] = c
                     await send_msg(bot, fmt_bando(c))
                     new_today += 1
                     state["active_bandi_count"] += 1
                     await asyncio.sleep(1.5)
 
-    # Generiamo il file Markdown aggiornato prima di chiudere
     crea_archivio_md(seen)
 
     if state.get("last_health_check") != today:
