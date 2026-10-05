@@ -1,6 +1,6 @@
 # 📂 Archivio Concorsi Radiologia
 
-_Ultimo aggiornamento: 04/10/2026 20:50_
+_Ultimo aggiornamento: 05/10/2026 03:53_
 
 In questa pagina trovi tutti i bandi rilevati dal bot.
 Clicca sul titolo in blu per aprire la pagina ufficiale del concorso.
