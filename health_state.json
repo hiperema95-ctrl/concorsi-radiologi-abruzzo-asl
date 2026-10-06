@@ -1,5 +1,5 @@
 {
-  "last_health_check": "2026-10-05",
+  "last_health_check": "2026-10-06",
   "source_alert_dates": {
     "InPA — radiologo": "2026-03-25",
     "InPA — radiologia": "2026-03-25",
@@ -15,7 +15,7 @@
     "FNO TSRM — Rubrica Concorsi": "2026-07-07",
     "ASL 4 Teramo": "2026-10-04",
     "TiConsiglio — Concorsi Sanità": "2026-07-13",
-    "ASL 1 Avezzano (Concorsi)": "2026-10-05",
+    "ASL 1 Avezzano (Concorsi)": "2026-10-06",
     "ASL 1 Avezzano (Albo Pretorio)": "2026-09-16",
     "ASL 3 Pescara (Albo Pretorio)": "2026-09-16",
     "ASL 4 Teramo (Albo Pretorio)": "2026-09-16",
@@ -40,14 +40,14 @@
     "ASL 1 Avezzano": "2026-10-01",
     "InfoConcorsi (EdiSES)": "2026-09-16",
     "ConcorsiPubblici.com (inPA/BUR)": "2026-10-01",
-    "ASL 1 Avezzano (Mobilità/Avvisi)": "2026-10-05",
-    "ASL 3 Pescara (Mobilità)": "2026-10-05"
+    "ASL 1 Avezzano (Mobilità/Avvisi)": "2026-10-06",
+    "ASL 3 Pescara (Mobilità)": "2026-10-06"
   },
   "js_alert_dates": {
     "ASL 2 Chieti (Albo Pretorio)": "2026-09-16",
     "AST Ancona (Albo Pretorio)": "2026-09-16"
   },
-  "total_runs": 789,
+  "total_runs": 790,
   "last_successful_scrape": "2026-07-13",
   "active_bandi_count": 10,
   "last_alert_date": "",
