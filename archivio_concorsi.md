@@ -1,9 +1,30 @@
 # 📂 Archivio Concorsi Radiologia
 
-_Ultimo aggiornamento: 24/10/2026 20:09_
+_Ultimo aggiornamento: 25/10/2026 03:02_
 
 In questa pagina trovi tutti i bandi rilevati dal bot.
 Clicca sul titolo in blu per aprire la pagina ufficiale del concorso.
+
+---
+
+### [Dirigente medico di radiodiagnostica PALERMO](https://www.concorsi.it/concorsi/dirigente-medico-di-radiodiagnostica-palermo)
+- **📍 Regione:** MARCHE
+- **🏛 Ente:** Concorsi.it (inPA/BUR)
+- **🗓 Rilevato il:** 25/10/2026
+
+---
+
+### [Concorsi per Dirigente medico di radiodiagnostica](https://www.concorsi.it/concorsi/dirigente-medico-di-radiodiagnostica)
+- **📍 Regione:** MARCHE
+- **🏛 Ente:** Concorsi.it (inPA/BUR)
+- **🗓 Rilevato il:** 25/10/2026
+
+---
+
+### [Concorso pubblico a 2 posti per Dirigente medico di radiodiagnostica](https://www.concorsi.it/scheda/444896-concorso-pubblico-per-titoli-ed-esami-per-la-copertura-a-tempo-indeterminato-di-n-2-posti-per-il-profilo-di-dirigente-medico-di-radiodiagnostica-per-la-uoc-radiologia-interventistica-del-po-civico)
+- **📍 Regione:** MARCHE
+- **🏛 Ente:** Concorsi.it (inPA/BUR)
+- **🗓 Rilevato il:** 25/10/2026
 
 ---
 
