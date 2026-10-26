@@ -1,9 +1,21 @@
 # 📂 Archivio Concorsi Radiologia
 
-_Ultimo aggiornamento: 26/10/2026 03:02_
+_Ultimo aggiornamento: 26/10/2026 12:11_
 
 In questa pagina trovi tutti i bandi rilevati dal bot.
 Clicca sul titolo in blu per aprire la pagina ufficiale del concorso.
+
+---
+
+### [AVVISO INTERNO PER IL CONFERIMENTO DI UN INCARICO DIRIGENZIALE DI
+ALTISSIMA PROFESSIONALITA’ A VALENZA DIPARTIMENTALE PRESSO LA U.O.C.
+RADIOLOGIA DEL PRESIDIO OSPEDALIERO DI PESCARA, AFFERENTE AL
+DIPARTIMENTO DEI SERVIZI OSPEDALIERI DELLA ASL DI PESCARA, AI SENSI
+DELL’ART. 22, COMMA 1, PARAGRAFO II, LETTERA A1) DEL CCNL 23.01.2024, AREA
+SANITA’.](https://www.asl.pe.it/DettaglioConcorso.jsp?id=1456)
+- **📍 Regione:** ABRUZZO
+- **🏛 Ente:** ASL 3 Pescara (Concorsi)
+- **🗓 Rilevato il:** 26/10/2026
 
 ---
 
