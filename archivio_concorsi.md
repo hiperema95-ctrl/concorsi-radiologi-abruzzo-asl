@@ -1,9 +1,16 @@
 # 📂 Archivio Concorsi Radiologia
 
-_Ultimo aggiornamento: 27/10/2026 21:47_
+_Ultimo aggiornamento: 28/10/2026 03:50_
 
 In questa pagina trovi tutti i bandi rilevati dal bot.
 Clicca sul titolo in blu per aprire la pagina ufficiale del concorso.
+
+---
+
+### [Conferimento degli incarichi quinquennali di direttore delle strutture complesse Chirurgia plastica e Radiologia 2 - Ospedale San Giovanni Bosco, varie discipline e riapertura dei termini del conferimento degli incarichi di direzione delle strutture complesse Radiologia 1 - Ospedale Maria Vittoria e Ortopedia e traumatologia 3 - Ospedale Martini.](https://www.concorsi.it/scheda/445760-conferimento-degli-incarichi-quinquennali-di-direttore-delle-strutture-complesse-chirurgia-plastica-e-radiologia-2-ospedale-san-giovanni-bosco-varie-discipline-e-riapertura-dei-termini-del-conferimento-degli-incarichi-di-direzione-delle-strutture-complesse-radiologia-1-ospedale-maria-vittoria-e-ortopedia-e-traumatologia-3-ospedale-martini)
+- **📍 Regione:** REGIONE DA VERIFICARE
+- **🏛 Ente:** Concorsi.it (inPA/BUR)
+- **🗓 Rilevato il:** 28/10/2026
 
 ---
 
